@@ -23,6 +23,12 @@ npm install
 
 On Windows PowerShell, the same commands work. If Git is not installed, install it from <https://git-scm.com/downloads>, then repeat these commands.
 
+If PowerShell reports that running scripts is disabled on the system when you run `npm install`, use the Windows command shim instead:
+
+```powershell
+npm.cmd install
+```
+
 The `npm install` step is required once per checkout. After that, use the launcher whenever you want to run the app.
 
 ## Run the app
