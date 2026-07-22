@@ -3,9 +3,7 @@ export function toCsv(rows, columns) { return [columns.join(','), ...rows.map((r
 
 const LEDGER_VERSION = 'cross-currency-score-ledger/v1';
 const LEDGER_COLUMNS = [
-  'ledgerVersion', 'generatedAt', 'sourceFileName', 'sourceRecordCount', 'candidatePairCount', 'pairKey',
-  'leftId', 'leftSourceRow', 'leftNameRaw', 'leftCurrencyRaw', 'rightId', 'rightSourceRow', 'rightNameRaw', 'rightCurrencyRaw',
-  'currenciesDiffer', 'score', 'band', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
+  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'band', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
   'websiteStatus', 'websiteLeftRaw', 'websiteLeftNormalized', 'websiteRightRaw', 'websiteRightNormalized',
@@ -35,9 +33,8 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     }));
     return {
       pairKey: [pair.leftId, pair.rightId].sort().join('|'),
-      left: { id: pair.leftId, sourceRow: left.__row ?? null, name: rawField(left, 'name'), currency: rawField(left, 'currencyisocode') },
-      right: { id: pair.rightId, sourceRow: right.__row ?? null, name: rawField(right, 'name'), currency: rawField(right, 'currencyisocode') },
-      currenciesDiffer: pair.currenciesDiffer,
+      left: { id: pair.leftId, currency: rawField(left, 'currencyisocode') },
+      right: { id: pair.rightId, currency: rawField(right, 'currencyisocode') },
       score: pair.score,
       band: pair.band,
       exactIdentity: pair.exactIdentity,
@@ -56,13 +53,19 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     candidatePairCount: ledgerRecords.length,
     records: ledgerRecords
   };
+  const summary = {
+    summaryVersion: 'cross-currency-score-ledger-summary/v1',
+    ledgerVersion: LEDGER_VERSION,
+    generatedAt: document.generatedAt,
+    source: document.source,
+    candidatePairCount: document.candidatePairCount,
+    pairColumns: LEDGER_COLUMNS,
+    evidenceFields: evidenceColumns.map(([field, prefix]) => ({ field, csvPrefix: prefix }))
+  };
   const rows = ledgerRecords.map((item) => {
     const row = {
-      ledgerVersion: LEDGER_VERSION, generatedAt: document.generatedAt, sourceFileName: document.source.fileName,
-      sourceRecordCount: document.source.recordCount, candidatePairCount: document.candidatePairCount, pairKey: item.pairKey,
-      leftId: item.left.id, leftSourceRow: item.left.sourceRow, leftNameRaw: item.left.name, leftCurrencyRaw: item.left.currency,
-      rightId: item.right.id, rightSourceRow: item.right.sourceRow, rightNameRaw: item.right.name, rightCurrencyRaw: item.right.currency,
-      currenciesDiffer: item.currenciesDiffer, score: item.score, band: item.band, exactIdentity: item.exactIdentity,
+      pairKey: item.pairKey, leftId: item.left.id, leftCurrency: item.left.currency, rightId: item.right.id, rightCurrency: item.right.currency,
+      score: item.score, band: item.band, exactIdentity: item.exactIdentity,
       reasonCodes: item.reasonCodes.join(' | '), reasons: item.reasons.join(' | '), matchedEvidenceFields: item.matchedEvidenceFields.join(' | '),
       conflictingEvidenceFields: item.conflictingEvidenceFields.join(' | '), blankEvidenceFields: item.blankEvidenceFields.join(' | ')
     };
@@ -75,7 +78,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     return row;
   });
   const columns = LEDGER_COLUMNS;
-  return { ...document, rows, columns, csv: toCsv(rows, columns), json: JSON.stringify(document, null, 2), version: LEDGER_VERSION };
+  return { ...document, rows, columns, summary, csv: toCsv(rows, columns), json: JSON.stringify(document, null, 2), summaryJson: JSON.stringify(summary, null, 2), version: LEDGER_VERSION };
 }
 
 export function buildExports(reviewed) {

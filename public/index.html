@@ -21,8 +21,8 @@
     </section>
     <section id="exports-panel" class="panel exports-panel" aria-labelledby="exports-heading" hidden>
       <div class="panel-heading"><div><h2 id="exports-heading">Outputs</h2><p id="exports-summary">Match the dataset to create the complete score ledger.</p></div><span class="output-badge">Primary deliverable</span></div>
-      <div class="export-actions"><button id="export-ledger-csv" class="button button-primary" type="button" disabled><span aria-hidden="true">⇩</span> Download full score ledger CSV</button><button id="export-ledger-json" class="button" type="button" disabled><span aria-hidden="true">⇩</span> Download full score ledger JSON</button></div>
-      <p class="muted export-note">The ledger includes every scored candidate pair, whether or not a proposal has been reviewed. Proposal exports remain available inside each pair.</p>
+      <div class="export-actions"><button id="export-ledger-csv" class="button button-primary" type="button" disabled><span aria-hidden="true">⇩</span> Download score ledger CSV</button><button id="export-ledger-json" class="button" type="button" disabled><span aria-hidden="true">⇩</span> Download full ledger JSON</button><button id="export-ledger-summary" class="button" type="button" disabled><span aria-hidden="true">⇩</span> Download summary JSON</button></div>
+      <p class="muted export-note">The CSV contains one lean row per scored pair. The summary JSON contains batch metadata and the column definitions. Proposal exports remain available inside each pair.</p>
     </section>
     <section class="workspace" aria-label="Review workspace">
       <aside class="panel queue-panel" aria-labelledby="queue-heading"><div class="panel-heading"><div><h2 id="queue-heading">2. Pair queue</h2><p id="queue-summary">Load a CSV to begin.</p></div></div><div id="queue" class="queue-list" tabindex="0"></div></aside>

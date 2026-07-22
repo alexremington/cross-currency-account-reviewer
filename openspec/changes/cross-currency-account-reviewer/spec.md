@@ -16,7 +16,7 @@ The proposal builder MUST select deterministic values, preserve source provenanc
 
 Exports MUST include versioned parent proposals, child associations, and audit metadata. Exported rows MUST reconcile to the reviewed pair and preserve source IDs.
 
-The app MUST also provide a full score ledger immediately after matching, without requiring proposal review. The ledger MUST contain exactly one record per scored candidate pair, in deterministic order, with source IDs and rows, currencies, score, band, exact-identity flag, reason codes, human-readable reasons, and raw/normalized evidence for Name, Website, Phone, composite Billing address, and Ultimate Parent Account. CSV and JSON downloads MUST use the `cross-currency-score-ledger/v1` contract. `LastModifiedDate` MUST NOT be treated as scoring evidence.
+The app MUST also provide a full score ledger immediately after matching, without requiring proposal review. The ledger MUST contain exactly one record per scored candidate pair, in deterministic order, with source IDs, currencies, score, band, exact-identity flag, reason codes, human-readable reasons, and raw/normalized evidence for Name, Website, Phone, composite Billing address, and Ultimate Parent Account. The CSV MUST contain only pair-level columns; batch metadata and column definitions MUST be provided in a separate `cross-currency-score-ledger-summary/v1` JSON download. The full structured JSON MUST use the `cross-currency-score-ledger/v1` contract. `LastModifiedDate` MUST NOT be treated as scoring evidence.
 
 ## Launcher and runtime contract
 

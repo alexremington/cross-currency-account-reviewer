@@ -40,7 +40,7 @@ The app reads files locally in the browser. It does not upload data or connect t
 1. Export the Salesforce Account data as a CSV and keep the file on your computer.
 2. In the app, choose **Import Account CSV** and select the file.
 3. Review the validation message and field guide, then choose **Match now**.
-4. Download the **full score ledger** CSV or JSON from the Outputs section. This is the complete scored-pair result and does not require reviewing individual pairs.
+4. Download the **score ledger CSV** from the Outputs section. It contains one lean row per scored pair. Download the full ledger JSON for structured evidence, or the summary JSON for batch metadata and column definitions. These downloads do not require reviewing individual pairs.
 5. Select a pair in the queue to inspect its evidence and proposed multicurrency parent.
 6. Optionally override proposed values. Every override requires a reason.
 7. Choose a parent currency, then export the reviewed parent proposal, child associations, and audit files.
