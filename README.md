@@ -9,13 +9,19 @@ Local-first browser app for reviewing Salesforce Account pairs that may represen
 
 ## Run
 
-macOS: double-click `Launch Cross-Currency Reviewer - Mac.command`. The launcher waits for the local server and opens the app in your default browser automatically.
+macOS: double-click `Launch Cross-Currency Reviewer - Mac.command`. The launcher force-restarts a per-user background service, waits for readiness, and opens the app in your default browser. The server remains running after the terminal window closes.
 
-Windows: double-click `Launch Cross-Currency Reviewer - Windows.cmd`, or run `powershell -ExecutionPolicy Bypass -File scripts/launch-windows.ps1`.
+Windows: double-click `Launch Cross-Currency Reviewer - Windows.cmd`, or run `powershell -ExecutionPolicy Bypass -File scripts/launch-windows.ps1`. The launcher starts a detached server, waits for readiness, and opens the browser without requiring the terminal to remain open.
 
 Manual: run `npm start`, then open <http://127.0.0.1:5190>.
 
 The app reads files locally in the browser. It does not upload data or connect to Salesforce.
+
+## Runtime lifecycle
+
+Both launchers use the versioned `/api/health` contract `cross-currency-account-reviewer/v1`. They force-restart a compatible app runtime, reject an unknown process occupying the configured port, and open the browser only after readiness.
+
+macOS service state and logs are stored outside the repository under `~/Library/Application Support/Cross-Currency Account Reviewer/`. Windows state and logs are stored under `%LOCALAPPDATA%\Cross-Currency Account Reviewer\`. To stop a managed runtime manually, run `node scripts/launch-local-app.js --stop --no-open` from the app directory.
 
 ## CSV contract
 

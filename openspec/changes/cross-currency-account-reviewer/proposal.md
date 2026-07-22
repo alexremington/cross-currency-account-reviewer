@@ -15,3 +15,9 @@ V1 includes CSV import, validation, pair-level scoring, explainable evidence, pr
 - Parent currency is explicitly selected before export.
 - Pair-level proposals ship before grouping.
 - Data stays in the browser and is never sent to a server or Salesforce.
+
+## Launcher lifecycle
+
+- macOS uses a per-user `launchd` service with force-restart behavior and logs outside the repository.
+- Windows uses a detached Node server with owned PID/state files and logs under the user-local application-data directory.
+- Both launchers verify `/api/health` against `cross-currency-account-reviewer/v1`, open the browser only after readiness, and fail closed when a different process owns the configured port.

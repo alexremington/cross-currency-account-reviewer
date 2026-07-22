@@ -6,5 +6,5 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 for (const file of ['Launch Cross-Currency Reviewer - Windows.cmd', 'scripts/launch-windows.ps1', 'README.md']) await access(join(root, file));
 const launcher = await readFile(join(root, 'Launch Cross-Currency Reviewer - Windows.cmd'), 'utf8');
 const powershell = await readFile(join(root, 'scripts/launch-windows.ps1'), 'utf8');
-if (!/npm start/i.test(launcher) || !/npm start/i.test(powershell) || !/node/i.test(launcher) || !/node/i.test(powershell)) throw new Error('Windows launchers must validate Node and start npm.');
+if (!/launch-local-app\.js/i.test(launcher) || !/launch-local-app\.js/i.test(powershell) || !/--force-restart/i.test(launcher) || !/--force-restart/i.test(powershell)) throw new Error('Windows launchers must invoke the detached force-restart launcher.');
 console.log('Windows launcher and setup contract passed.');

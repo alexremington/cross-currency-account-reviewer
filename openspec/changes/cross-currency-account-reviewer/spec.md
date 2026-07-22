@@ -15,3 +15,7 @@ The proposal builder MUST select deterministic values, preserve source provenanc
 ## Exports
 
 Exports MUST include versioned parent proposals, child associations, and audit metadata. Exported rows MUST reconcile to the reviewed pair and preserve source IDs.
+
+## Launcher and runtime contract
+
+The server MUST expose `GET /api/health` with `appId`, `runtimeContractVersion`, `pid`, `port`, and `runtimeId`. The launchers MUST use `cross-currency-account-reviewer/v1`, keep logs and state outside the repository, wait for health readiness before opening the browser, and reject a port occupied by an unknown or incompatible process.

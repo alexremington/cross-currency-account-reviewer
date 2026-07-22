@@ -8,3 +8,6 @@
 - [x] Add checks, Windows contract checks, results sanity checks, and Playwright smoke workflow.
 - [x] Complete reviewer and qa-ux validation; resolve findings.
 - [x] Add hosted macOS/Windows CI coverage for the real Playwright smoke path.
+- [x] Add detached Windows lifecycle and owned runtime health/state contract.
+- [x] Add macOS launchd force-restart lifecycle and external logs.
+- [x] Validate browser handoff, stale-process rejection, terminal independence, and cross-platform launcher smoke.

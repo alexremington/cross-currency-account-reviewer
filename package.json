@@ -12,6 +12,7 @@
     "check": "node scripts/check.js",
     "check:windows": "node scripts/check-windows.js",
     "test": "node --test tests/core.test.js tests/launcher.test.js",
+    "smoke:launcher": "node tests/launcher-lifecycle-smoke.js",
     "smoke:ui:local": "node tests/smoke-ui.js",
     "sanity:results": "node scripts/sanity-results.js"
   },
