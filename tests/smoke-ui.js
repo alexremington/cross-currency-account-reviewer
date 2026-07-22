@@ -12,7 +12,17 @@ const server = spawn(process.execPath, ['server/server.js'], { cwd: root, env: {
 try {
   await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('server readiness timeout')), 10000); server.stdout.on('data', (chunk) => { if (String(chunk).includes(`127.0.0.1:${port}`)) { clearTimeout(timer); resolve(); } }); server.stderr.on('data', (chunk) => { if (String(chunk).includes('EADDRINUSE')) { clearTimeout(timer); reject(new Error(`UI smoke port ${port} is already in use.`)); } }); server.on('error', reject); });
   const browser = await playwright.chromium.launch({ headless: true }); const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' }); await page.locator('#csv-input').setInputFiles(fixture); if (!(await page.getByText('LastModifiedDate', { exact: true }).count())) throw new Error('Missing complete field guide.'); await page.getByRole('button', { name: 'Match now' }).click();
+  await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
+  const exampleDownload = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download example CSV template' }).click();
+  const example = await exampleDownload;
+  if (example.suggestedFilename() !== 'account-upload-example.csv') throw new Error(`Unexpected example filename: ${example.suggestedFilename()}`);
+  const exampleStream = await example.createReadStream();
+  if (!exampleStream) throw new Error('Example CSV download did not produce a readable file.');
+  let exampleText = '';
+  for await (const chunk of exampleStream) exampleText += chunk;
+  if (!exampleText.includes('CurrencyIsoCode') || !exampleText.includes('Ultimate_Parent_Account__c')) throw new Error('Named regression: example CSV template is missing required upload headers.');
+  await page.locator('#csv-input').setInputFiles(fixture); if (!(await page.getByText('LastModifiedDate', { exact: true }).count())) throw new Error('Missing complete field guide.'); await page.getByRole('button', { name: 'Match now' }).click();
   if (!(await page.getByText('Complete ledger ready: 2 scored candidate pairs.').count())) throw new Error('Missing ledger readiness summary.');
   const ledgerDownload = page.waitForEvent('download'); await page.getByRole('button', { name: 'Download score ledger CSV' }).click(); const ledger = await ledgerDownload;
   if (ledger.suggestedFilename() !== 'score-ledger.csv') throw new Error(`Unexpected ledger filename: ${ledger.suggestedFilename()}`); if (await ledger.failure()) throw new Error(`Ledger download failed: ${await ledger.failure()}`); const ledgerStream = await ledger.createReadStream(); if (!ledgerStream) throw new Error('Ledger download did not produce a readable file.'); let ledgerText = ''; for await (const chunk of ledgerStream) ledgerText += chunk; if (!ledgerText.includes('pairKey') || !ledgerText.includes('001EUR|001USD')) throw new Error('Ledger download is missing the expected pair data.');

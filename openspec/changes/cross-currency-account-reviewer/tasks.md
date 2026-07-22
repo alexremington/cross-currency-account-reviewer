@@ -15,3 +15,4 @@
 - [x] Add full score-ledger CSV and JSON exports with one auditable record per scored pair.
 - [x] Apply Hume’s ledger design and whole-UI maturity sweep across queue, evidence, source records, proposal editing, exports, and responsive states.
 - [x] Add ledger parity regression and real browser download coverage.
+- [x] Add an import-panel example CSV download affordance with Hume-aligned spacing and live download coverage.

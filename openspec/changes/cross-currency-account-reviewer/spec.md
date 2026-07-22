@@ -3,6 +3,7 @@
 ## CSV validation
 
 The app MUST require `Id`, `Name`, and `CurrencyIsoCode`, reject duplicate IDs, report missing values, and support quoted CSV, BOM, CRLF, and Unicode input.
+The import step MUST provide a downloadable example CSV template that includes the accepted upload headers so reviewers can start from a known-good file shape.
 
 ## Scoring
 

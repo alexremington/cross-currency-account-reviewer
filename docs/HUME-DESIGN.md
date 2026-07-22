@@ -30,12 +30,14 @@ This design direction was produced from the Hume review for the approved v1 stor
 - State the exact scored-pair count and distinguish the complete ledger from the reviewed-parent export.
 - The ledger must preserve pair identity, IDs, currencies, scores, bands, reasons, and raw/normalized evidence for every scoring field. Keep the CSV lean; provide batch metadata and column definitions in a separate summary JSON.
 - Keep import guidance grouped into required, scored, and imported-but-not-scored fields. Explain the nonblank, different-currency candidate rule.
+- In the import panel, keep the example CSV help affordance visually secondary to the primary upload button, but close enough to read as part of the same workflow. It should describe the file as an example/template, not as required input.
 - The queue should be scan-friendly, evidence rows should have explicit column headers and text statuses, and source/proposal fields should use human-readable labels.
 - Preserve generous spacing, visible focus, keyboard operation, labelled scroll regions, and no clipped content at 320px and 390px widths.
 
 ## Acceptance criteria
 
 - A valid exact cross-currency pair visibly shows score 100 and the reason `Exact normalized identity; currency differs`.
+- The import panel provides a keyboard-focusable download link for an example CSV template whose headers match the accepted upload contract.
 - Every proposed parent value identifies its source child or an explicit manual override.
 - Overrides require a reason and remain visibly distinct from defaults.
 - A reviewer can complete import, Match now, evidence inspection, override, and export through the real UI path.
