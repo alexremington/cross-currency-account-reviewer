@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCsv, normalizeWebsite } from '../core/csv.js';
 import { generatePairs, scorePair } from '../core/scoring.js';
+import { ACCOUNT_MODEL_VERSION } from '../core/account-model.js';
 import { buildProposal } from '../core/proposals.js';
 import { buildExports, buildScoreLedger } from '../core/export.js';
+import parityFixtures from './fixtures/account-model-parity.json' with { type: 'json' };
 
 const fixture = `Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main`;
 
@@ -21,6 +23,35 @@ test('named regression: same-currency pair cannot enter exact cross-currency lan
 test('named regression: conflicting evidence prevents 100', () => {
   const parsed = parseCsv(fixture.replace('https://www.acme.example.com', 'https://other.example.com')); const pair = scorePair(parsed.rows[0], parsed.rows[1]);
   assert.notEqual(pair.score, 100); assert.ok(pair.reasonCodes.includes('conflicting-evidence'));
+});
+
+test('named regression: pinned Account model metadata and lanes are emitted', () => {
+  const parsed = parseCsv(fixture);
+  const pair = scorePair(parsed.rows[0], parsed.rows[1]);
+  assert.equal(pair.modelVersion, ACCOUNT_MODEL_VERSION);
+  assert.equal(pair.lane, 'exact-confidence');
+  assert.equal(pair.exactConfidenceRule, 'exact-name-website-address-phone');
+  assert.equal(pair.accountNameRelationship, 'same-level-exact');
+  assert.equal(pair.operationalScore, 100);
+  assert.ok(pair.fieldScores.name === 1 && pair.fieldScores.website === 1);
+});
+
+test('named regression: currency eligibility does not add identity confidence', () => {
+  const usdEur = scorePair(parseCsv(fixture).rows[0], parseCsv(fixture).rows[1]);
+  const gbpCad = scorePair(parseCsv(fixture.replace('USD', 'GBP').replace('EUR', 'CAD')).rows[0], parseCsv(fixture.replace('USD', 'GBP').replace('EUR', 'CAD')).rows[1]);
+  assert.equal(usdEur.score, gbpCad.score);
+  assert.equal(usdEur.operationalScore, gbpCad.operationalScore);
+  assert.equal(usdEur.reasonCodes.includes('currency-differs'), true);
+});
+
+test('named parity fixtures: mature Account lanes and contradiction metadata remain stable', () => {
+  for (const fixtureCase of parityFixtures) {
+    const pair = scorePair(fixtureCase.left, fixtureCase.right);
+    assert.equal(pair.lane, fixtureCase.expected.lane, fixtureCase.name);
+    assert.equal(pair.accountNameRelationship, fixtureCase.expected.relationship, fixtureCase.name);
+    if (fixtureCase.expected.operationalScore != null) assert.equal(pair.operationalScore, fixtureCase.expected.operationalScore, fixtureCase.name);
+    if (fixtureCase.expected.hasConflict) assert.ok(pair.reasonCodes.includes('conflicting-evidence'), fixtureCase.name);
+  }
 });
 
 test('CSV handles BOM, CRLF, and quoted commas', () => {

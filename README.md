@@ -53,6 +53,10 @@ The app reads files locally in the browser. It does not upload data or connect t
 
 The app only creates local downloads. It does not insert records into Salesforce.
 
+### Account model
+
+Cross-Currency Account Reviewer uses the pinned Duplicate Reviewer Account model `duplicate-reviewer-account-model/2026-07-20`. It carries over fuzzy field comparison, evidence weighting, contradiction handling, hierarchy-aware account-name interpretation, confidence lanes, and explainable reason metadata. Different populated currencies are required for this app's lane but do not themselves increase the identity score. Future model changes are applied through explicit parity releases.
+
 ## Runtime lifecycle
 
 Both launchers use the versioned `/api/health` contract `cross-currency-account-reviewer/v1`. They force-restart a compatible app runtime, reject an unknown process occupying the configured port, and open the browser only after readiness.

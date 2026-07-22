@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Exact same-level identity",
+    "left": { "id": "PARITY-EXACT-USD", "name": "Acme Media", "currencyisocode": "USD", "website": "https://acme.example.com", "phone": "2125550100", "billingstreet": "1 Main Street" },
+    "right": { "id": "PARITY-EXACT-EUR", "name": "Acme Media", "currencyisocode": "EUR", "website": "https://www.acme.example.com", "phone": "2125550100", "billingstreet": "1 Main Street" },
+    "expected": { "lane": "exact-confidence", "relationship": "same-level-exact", "operationalScore": 100 }
+  },
+  {
+    "name": "Exact name with conflicting website",
+    "left": { "id": "PARITY-CONFLICT-USD", "name": "Acme Media", "currencyisocode": "USD", "website": "https://acme.example.com", "phone": "2125550100" },
+    "right": { "id": "PARITY-CONFLICT-EUR", "name": "Acme Media", "currencyisocode": "EUR", "website": "https://other.example.com", "phone": "2125550100" },
+    "expected": { "lane": "weighted-review", "relationship": "same-level-exact", "hasConflict": true }
+  },
+  {
+    "name": "Near-name corroborated pair",
+    "left": { "id": "PARITY-NEAR-USD", "name": "Acme Media", "currencyisocode": "USD", "website": "https://acme.example.com", "phone": "2125550100", "billingstreet": "1 Main Street" },
+    "right": { "id": "PARITY-NEAR-EUR", "name": "Acme Media Group", "currencyisocode": "EUR", "website": "https://acme.example.com", "phone": "2125550100", "billingstreet": "1 Main Street" },
+    "expected": { "lane": "intermediate-confidence", "relationship": "same-level-equivalent" }
+  }
+]

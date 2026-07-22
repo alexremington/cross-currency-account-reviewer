@@ -3,7 +3,7 @@ export function toCsv(rows, columns) { return [columns.join(','), ...rows.map((r
 
 const LEDGER_VERSION = 'cross-currency-score-ledger/v1';
 const LEDGER_COLUMNS = [
-  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'band', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
+  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'operationalScore', 'band', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
   'websiteStatus', 'websiteLeftRaw', 'websiteLeftNormalized', 'websiteRightRaw', 'websiteRightNormalized',
@@ -36,7 +36,18 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       left: { id: pair.leftId, currency: rawField(left, 'currencyisocode') },
       right: { id: pair.rightId, currency: rawField(right, 'currencyisocode') },
       score: pair.score,
+      operationalScore: pair.operationalScore,
       band: pair.band,
+      modelVersion: pair.modelVersion || '',
+      accountNameRelationship: pair.accountNameRelationship || '',
+      accountNameRelationshipReason: pair.accountNameRelationshipReason || '',
+      contradictionCategory: pair.contradictionCategory || '',
+      contradictionReason: pair.contradictionReason || '',
+      exactConfidenceRule: pair.exactConfidenceRule || '',
+      intermediateConfidenceRule: pair.intermediateConfidenceRule || '',
+      exactConfidenceEligible: Boolean(pair.exactConfidenceEligible),
+      intermediateConfidenceEligible: Boolean(pair.intermediateConfidenceEligible),
+      fieldScores: pair.fieldScores || {},
       exactIdentity: pair.exactIdentity,
       reasonCodes: pair.reasonCodes,
       reasons: pair.reasons,
@@ -50,6 +61,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     ledgerVersion: LEDGER_VERSION,
     generatedAt: metadata.generatedAt || new Date().toISOString(),
     source: { fileName: metadata.fileName || '', recordCount: records.length, headers: metadata.headers || [] },
+    modelVersion: ledgerRecords.find((record) => record.modelVersion)?.modelVersion || '',
     candidatePairCount: ledgerRecords.length,
     records: ledgerRecords
   };
@@ -58,6 +70,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     ledgerVersion: LEDGER_VERSION,
     generatedAt: document.generatedAt,
     source: document.source,
+    modelVersion: document.modelVersion,
     candidatePairCount: document.candidatePairCount,
     pairColumns: LEDGER_COLUMNS,
     evidenceFields: evidenceColumns.map(([field, prefix]) => ({ field, csvPrefix: prefix }))
@@ -65,7 +78,12 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const rows = ledgerRecords.map((item) => {
     const row = {
       pairKey: item.pairKey, leftId: item.left.id, leftCurrency: item.left.currency, rightId: item.right.id, rightCurrency: item.right.currency,
-      score: item.score, band: item.band, exactIdentity: item.exactIdentity,
+      score: item.score, operationalScore: item.operationalScore, band: item.band, modelVersion: item.modelVersion,
+      accountNameRelationship: item.accountNameRelationship, accountNameRelationshipReason: item.accountNameRelationshipReason,
+      contradictionCategory: item.contradictionCategory, contradictionReason: item.contradictionReason,
+      exactConfidenceRule: item.exactConfidenceRule, intermediateConfidenceRule: item.intermediateConfidenceRule,
+      exactConfidenceEligible: item.exactConfidenceEligible, intermediateConfidenceEligible: item.intermediateConfidenceEligible,
+      fieldScores: JSON.stringify(item.fieldScores), exactIdentity: item.exactIdentity,
       reasonCodes: item.reasonCodes.join(' | '), reasons: item.reasons.join(' | '), matchedEvidenceFields: item.matchedEvidenceFields.join(' | '),
       conflictingEvidenceFields: item.conflictingEvidenceFields.join(' | '), blankEvidenceFields: item.blankEvidenceFields.join(' | ')
     };

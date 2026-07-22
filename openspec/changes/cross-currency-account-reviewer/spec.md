@@ -7,7 +7,7 @@ The import step MUST provide a downloadable example CSV template that includes t
 
 ## Scoring
 
-The scorer MUST compare only records with different nonblank currencies, use deterministic normalization, emit a numeric score, confidence band, field evidence, reason codes, and human-readable reasons, and reserve 100 for the exact-identity contract.
+The scorer MUST compare only records with different nonblank currencies, use the pinned mature Account model, emit a visible belief score, operational score, confidence lane, field evidence, reason codes, and human-readable reasons. Currency difference is eligibility context and MUST NOT add identity-confidence points. A score of 100 is reserved for an exact-confidence rule from the pinned Account model.
 
 ## Parent proposals
 
