@@ -3,6 +3,7 @@ import { normalizeAddress, normalizePhone, normalizeText, normalizeWebsite } fro
 // Pinned from Duplicate Reviewer Account model: recalibrate-account-scoring-model
 // plus account-three-lane-score-distribution and account-hierarchy-aware-top-lane.
 export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-20';
+export const MAX_CROSS_CURRENCY_CANDIDATE_PAIRS = 250000;
 
 const FIELD_WEIGHTS = {
   accountCurrency: 28,
@@ -48,6 +49,7 @@ const HIERARCHY_TOKENS = new Set([
 ]);
 
 const SCOPE_TOKENS = new Set(['foundation', 'fund', 'holding', 'holdings', 'llc', 'ltd', 'plc', 'trust']);
+const PLACEHOLDER_VALUES = new Set(['-', '--', '---', 'n a', 'na', 'none', 'null', 'unknown', 'not available']);
 
 const EXACT_RULE_SCORES = {
   'exact-name-website-address-phone': 100,
@@ -71,6 +73,10 @@ const INTERMEDIATE_RULE_SCORES = {
 function clamp(value) { return Math.max(0, Math.min(100, Math.round(value))); }
 function tokens(value) { return normalizeText(value).split(' ').filter(Boolean); }
 function tokenSet(value) { return new Set(tokens(value)); }
+function meaningful(value) {
+  const normalized = normalizeText(value);
+  return Boolean(normalized && !PLACEHOLDER_VALUES.has(normalized));
+}
 function overlap(left, right) {
   if (!left.length || !right.length) return 0;
   const a = new Set(left); const b = new Set(right);
@@ -80,9 +86,8 @@ function overlap(left, right) {
 }
 
 function similarity(left, right) {
-  if (!left || !right) return null;
+  if (!meaningful(left) || !meaningful(right)) return null;
   const a = normalizeText(left); const b = normalizeText(right);
-  if (!a || !b) return null;
   if (a === b) return 1;
   const tokenScore = overlap(a.split(' '), b.split(' '));
   const compactA = a.replaceAll(' ', ''); const compactB = b.replaceAll(' ', '');
@@ -108,12 +113,12 @@ function normalizedEditSimilarity(left, right) {
 }
 
 function exactValue(left, right) {
-  if (!left || !right) return null;
+  if (!meaningful(left) || !meaningful(right)) return null;
   return normalizeText(left) === normalizeText(right) ? 1 : 0;
 }
 
 function websiteScore(left, right) {
-  if (!left || !right) return null;
+  if (!meaningful(left) || !meaningful(right)) return null;
   return normalizeWebsite(left) === normalizeWebsite(right) ? 1 : similarity(left, right);
 }
 
@@ -130,6 +135,7 @@ function addressScore(left, right) {
 }
 
 function accountNameRelationship(nameScore, left, right) {
+  if (!meaningful(left.name) || !meaningful(right.name)) return { kind: 'missing-name', reason: 'Missing usable account name.' };
   const leftTokens = tokenSet(left.name); const rightTokens = tokenSet(right.name);
   if (nameScore === 1) return { kind: 'same-level-exact', reason: 'Exact normalized account name.' };
   const shorter = leftTokens.size <= rightTokens.size ? leftTokens : rightTokens;
@@ -181,6 +187,7 @@ function billingAddressScore(scores) {
 }
 
 function weightedScore(scores, left, right) {
+  if (scores.name == null) return { value: 0, discounted: false, nameRelationship: accountNameRelationship(scores.name, left, right) };
   const entries = Object.entries(FIELD_WEIGHTS).filter(([field]) => scores[field] != null);
   if (!entries.length) return { value: 0, discounted: false };
   let numerator = 0; let denominator = 0; let discounted = false;
@@ -306,13 +313,14 @@ function blockingKeys(record) {
   const phone = normalizePhone(record.phone);
   const address = normalizeAddress(record);
   const parent = normalizeText(record.ultimate_parent_account__c);
+  const addressParts = [record.billingstreet, record.billingcity, record.billingstate, record.billingpostalcode].filter(meaningful);
   return [
-    name && `name:${name.split(' ').slice(0, 3).join(' ')}`,
-    name && `name-prefix:${name.slice(0, 12)}`,
-    website && `website:${website}`,
-    phone && `phone:${phone.slice(-7)}`,
-    address && `address:${address.slice(0, 24)}`,
-    parent && `parent:${parent}`
+    meaningful(record.name) && `name:${name.split(' ').slice(0, 3).join(' ')}`,
+    meaningful(record.name) && `name-prefix:${name.slice(0, 12)}`,
+    meaningful(website) && `website:${website}`,
+    phone.length >= 7 && `phone:${phone.slice(-7)}`,
+    address && addressParts.length > 0 && `address:${address.slice(0, 24)}`,
+    meaningful(parent) && `parent:${parent}`
   ].filter(Boolean);
 }
 
@@ -323,17 +331,35 @@ export function generateCrossCurrencyPairs(records) {
     blocks.get(key).add(index);
   }));
   const keys = new Set();
+  let candidateCapHit = false;
   for (const indexes of blocks.values()) {
     const values = [...indexes];
     for (let i = 0; i < values.length; i += 1) for (let j = i + 1; j < values.length; j += 1) {
       const left = records[values[i]]; const right = records[values[j]];
       const currenciesDiffer = left.currencyisocode && right.currencyisocode && String(left.currencyisocode).toUpperCase() !== String(right.currencyisocode).toUpperCase();
-      if (currenciesDiffer) keys.add([values[i], values[j]].sort((a, b) => a - b).join('|'));
+      if (currenciesDiffer) {
+        if (keys.size >= MAX_CROSS_CURRENCY_CANDIDATE_PAIRS) {
+          candidateCapHit = true;
+          break;
+        }
+        keys.add([values[i], values[j]].sort((a, b) => a - b).join('|'));
+        if (keys.size >= MAX_CROSS_CURRENCY_CANDIDATE_PAIRS) {
+          candidateCapHit = true;
+          break;
+        }
+      }
     }
+    if (candidateCapHit) break;
   }
-  return [...keys].map((key) => {
+  const pairs = [...keys].map((key) => {
     const [leftIndex, rightIndex] = key.split('|').map(Number);
     const [left, right] = [records[leftIndex], records[rightIndex]].sort((a, b) => String(a.id).localeCompare(String(b.id)));
     return scoreCrossCurrencyPair(left, right);
   }).filter(Boolean).sort((a, b) => b.operationalScore - a.operationalScore || b.score - a.score || `${a.leftId}|${a.rightId}`.localeCompare(`${b.leftId}|${b.rightId}`));
+  pairs.candidateStats = {
+    candidatePairs: pairs.length,
+    candidateCap: MAX_CROSS_CURRENCY_CANDIDATE_PAIRS,
+    candidateCapHit
+  };
+  return pairs;
 }

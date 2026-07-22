@@ -54,6 +54,27 @@ test('named parity fixtures: mature Account lanes and contradiction metadata rem
   }
 });
 
+test('named regression: candidate generation reports and enforces a production safety budget', () => {
+  const rows = Array.from({ length: 1200 }, (_, index) => ({
+    id: `BUDGET-${index}`,
+    name: 'Shared Account',
+    currencyisocode: index % 2 ? 'EUR' : 'USD',
+    website: '', phone: '', billingstreet: '', billingcity: '', billingstate: '', billingpostalcode: '', billingcountry: '', ultimate_parent_account__c: ''
+  }));
+  const pairs = generatePairs(rows);
+  assert.equal(pairs.length, 250000);
+  assert.equal(pairs.candidateStats.candidateCapHit, true);
+});
+
+test('named regression: placeholder account names cannot create high-confidence matches', () => {
+  const left = { id: 'PLACEHOLDER-USD', name: '---', currencyisocode: 'USD', billingcountry: 'United States' };
+  const right = { id: 'PLACEHOLDER-EUR', name: '---', currencyisocode: 'EUR', billingcountry: 'United States' };
+  const pair = scorePair(left, right);
+  assert.equal(pair.score, 0);
+  assert.equal(pair.operationalScore, 0);
+  assert.equal(pair.accountNameRelationship, 'missing-name');
+});
+
 test('CSV handles BOM, CRLF, and quoted commas', () => {
   const parsed = parseCsv('\uFEFFId,Name,CurrencyIsoCode,BillingStreet\r\nA,"Acme, Inc.",USD,"1 Main, Suite 2"\r\n');
   assert.equal(parsed.errors.length, 0); assert.equal(parsed.rows[0].name, 'Acme, Inc.'); assert.equal(parsed.rows[0].billingstreet, '1 Main, Suite 2'); assert.equal(normalizeWebsite('https://www.Example.com/path'), 'example com');
