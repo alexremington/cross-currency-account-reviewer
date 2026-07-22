@@ -9,7 +9,7 @@ Local-first browser app for reviewing Salesforce Account pairs that may represen
 
 ## Run
 
-macOS: double-click `Launch Cross-Currency Reviewer - Mac.command`.
+macOS: double-click `Launch Cross-Currency Reviewer - Mac.command`. The launcher waits for the local server and opens the app in your default browser automatically.
 
 Windows: double-click `Launch Cross-Currency Reviewer - Windows.cmd`, or run `powershell -ExecutionPolicy Bypass -File scripts/launch-windows.ps1`.
 
