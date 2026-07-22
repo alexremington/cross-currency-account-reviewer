@@ -7,15 +7,45 @@ Local-first browser app for reviewing Salesforce Account pairs that may represen
 - Node.js 20 or newer: <https://nodejs.org/>
 - macOS, Windows, or Linux
 
-## Run
+## First-time setup
 
-macOS: double-click `Launch Cross-Currency Reviewer - Mac.command`. The launcher force-restarts a per-user background service, waits for readiness, and opens the app in your default browser. The server remains running after the terminal window closes.
+These steps are for a colleague using a new computer. The launcher is included in the GitHub repository; it does not need to be provided separately.
 
-Windows: double-click `Launch Cross-Currency Reviewer - Windows.cmd`, or run `powershell -ExecutionPolicy Bypass -File scripts/launch-windows.ps1`. The launcher starts a detached server, waits for readiness, and opens the browser without requiring the terminal to remain open.
+1. Install Node.js 20 or newer from <https://nodejs.org/>. On Windows, use the LTS installer and restart PowerShell afterward if it was already open.
+2. Open Terminal on macOS or PowerShell on Windows.
+3. Clone the public repository and enter its folder:
+
+```bash
+git clone https://github.com/alexremington/cross-currency-account-reviewer.git
+cd cross-currency-account-reviewer
+npm install
+```
+
+On Windows PowerShell, the same commands work. If Git is not installed, install it from <https://git-scm.com/downloads>, then repeat these commands.
+
+The `npm install` step is required once per checkout. After that, use the launcher whenever you want to run the app.
+
+## Run the app
+
+macOS: open the cloned repository in Finder and double-click `Launch Cross-Currency Reviewer - Mac.command`. If macOS blocks the first launch, right-click the file, choose **Open**, and confirm. The launcher force-restarts a per-user background service, waits for readiness, and opens the app in your default browser. The server remains running after the terminal window closes.
+
+Windows: open the cloned repository in File Explorer and double-click `Launch Cross-Currency Reviewer - Windows.cmd`. If execution policy prevents the launcher from running, open PowerShell in the repository folder and run `powershell -ExecutionPolicy Bypass -File scripts/launch-windows.ps1`. The launcher starts a detached server, waits for readiness, and opens the browser without requiring the terminal to remain open.
 
 Manual: run `npm start`, then open <http://127.0.0.1:5190>.
 
 The app reads files locally in the browser. It does not upload data or connect to Salesforce.
+
+## Use the app
+
+1. Export the Salesforce Account data as a CSV and keep the file on your computer.
+2. In the app, choose **Import Account CSV** and select the file.
+3. Review the validation message and field guide, then choose **Match now**.
+4. Download the **full score ledger** CSV or JSON from the Outputs section. This is the complete scored-pair result and does not require reviewing individual pairs.
+5. Select a pair in the queue to inspect its evidence and proposed multicurrency parent.
+6. Optionally override proposed values. Every override requires a reason.
+7. Choose a parent currency, then export the reviewed parent proposal, child associations, and audit files.
+
+The app only creates local downloads. It does not insert records into Salesforce.
 
 ## Runtime lifecycle
 
