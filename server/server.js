@@ -14,7 +14,7 @@ const server = http.createServer(async (request, response) => {
     const requestPath = decodeURIComponent((request.url || '/').split('?')[0]);
     if (requestPath === '/api/health') {
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      response.end(JSON.stringify({ ok: true, appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, pid: process.pid, port, runtimeId }));
+      response.end(JSON.stringify({ ok: true, appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, sourceRoot: root, pid: process.pid, port, runtimeId }));
       return;
     }
     const relative = requestPath === '/' ? 'public/index.html' : requestPath.replace(/^\/+/, '');

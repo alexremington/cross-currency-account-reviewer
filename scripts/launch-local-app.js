@@ -2,8 +2,8 @@
 
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { closeSync, openSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { closeSync, openSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
@@ -22,6 +22,7 @@ const port = Number(process.env.CROSS_CURRENCY_REVIEWER_PORT || 5190);
 const url = `http://127.0.0.1:${port}`;
 const stateDir = process.env.CROSS_CURRENCY_REVIEWER_STATE_DIR || defaultStateDir();
 const statePath = path.join(stateDir, 'runtime.json');
+const lockPath = path.join(stateDir, 'launcher.lock');
 const logDir = path.join(stateDir, 'logs');
 const outLog = path.join(logDir, 'server.out.log');
 const errLog = path.join(logDir, 'server.err.log');
@@ -35,25 +36,51 @@ async function main() {
   const args = new Set(process.argv.slice(2));
   const forceRestart = args.has('--force-restart');
   const noOpen = args.has('--no-open');
-  if (args.has('--stop')) {
-    await stopRuntime();
-    console.log(`${APP_ID} stopped.`);
-    return;
-  }
-  if (![...args].every((arg) => ['--force-restart', '--no-open'].includes(arg))) throw new Error(`Unknown launcher option. Use --force-restart, --no-open, or --stop.`);
+  if (![...args].every((arg) => ['--force-restart', '--no-open', '--stop'].includes(arg))) throw new Error(`Unknown launcher option. Use --force-restart, --no-open, or --stop.`);
   await mkdir(logDir, { recursive: true });
-  const current = await health();
-  if (current && isCurrentRuntime(current) && !forceRestart) {
-    console.log(`${APP_ID} is already running at ${url}`);
+  const releaseLock = await acquireLock();
+  try {
+    if (args.has('--stop')) {
+      await stopRuntime();
+      console.log(`${APP_ID} stopped.`);
+      return;
+    }
+    const current = await health();
+    if (current && isCurrentRuntime(current) && !forceRestart) {
+      console.log(`${APP_ID} is already running at ${url}`);
+      if (!noOpen) await openUrl(url);
+      return;
+    }
+    const expectedRuntimeId = useLaunchAgent
+      ? await ensureLaunchAgent({ forceRestart, current })
+      : await ensureDetachedRuntime({ forceRestart, current });
+    const ready = await waitForHealth(expectedRuntimeId);
+    if (!ready) throw new Error(`${APP_ID} did not become ready. Check ${outLog} and ${errLog}.`);
+    console.log(`${APP_ID} is running at ${url}`);
     if (!noOpen) await openUrl(url);
-    return;
+  } finally {
+    await releaseLock();
   }
-  if (useLaunchAgent) await ensureLaunchAgent({ forceRestart, current });
-  else await ensureDetachedRuntime({ forceRestart, current });
-  const ready = await waitForHealth();
-  if (!ready) throw new Error(`${APP_ID} did not become ready. Check ${outLog} and ${errLog}.`);
-  console.log(`${APP_ID} is running at ${url}`);
-  if (!noOpen) await openUrl(url);
+}
+
+async function acquireLock() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let fd = null;
+    try {
+      fd = openSync(lockPath, 'wx');
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+      closeSync(fd);
+      fd = null;
+      return async () => { try { unlinkSync(lockPath); } catch { /* already released */ } };
+    } catch (error) {
+      if (fd !== null) { try { closeSync(fd); } catch { /* lock cleanup below */ } try { unlinkSync(lockPath); } catch { /* already removed */ } }
+      if (error.code !== 'EEXIST') throw error;
+      const lock = await readJson(lockPath);
+      if (lock?.pid && isAlive(Number(lock.pid))) throw new Error(`Another ${APP_ID} launcher is already managing this runtime.`);
+      try { await unlink(lockPath); } catch { /* retry */ }
+    }
+  }
+  throw new Error(`Could not acquire the ${APP_ID} launcher lock.`);
 }
 
 function defaultStateDir() {
@@ -63,7 +90,7 @@ function defaultStateDir() {
 }
 
 function isCurrentRuntime(value) {
-  return value?.ok === true && value.appId === APP_ID && value.runtimeContractVersion === RUNTIME_CONTRACT_VERSION && Number(value.port) === port;
+  return value?.ok === true && value.appId === APP_ID && value.runtimeContractVersion === RUNTIME_CONTRACT_VERSION && value.sourceRoot === PROJECT_DIR && Number(value.port) === port;
 }
 
 async function health() { return requestJson(`${url}/api/health`).catch(() => null); }
@@ -83,12 +110,25 @@ function requestJson(target) {
 
 async function ensureLaunchAgent({ forceRestart, current }) {
   if (current && !isCurrentRuntime(current) && !forceRestart) throw incompatiblePortError(current);
+  const previousState = await readFile(statePath, 'utf8').catch(() => null);
+  const previousPlist = await readFile(plistPath, 'utf8').catch(() => null);
   await bootoutLaunchAgent();
-  if (await portListening() && (!current || current.appId !== APP_ID)) throw incompatiblePortError(current);
+  await waitForPortFree();
+  if (await portListening()) throw incompatiblePortError(current);
   const runtimeId = randomUUID();
-  await writeFile(statePath, JSON.stringify({ appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, runtimeId, mode: 'launchd', pid: null, port, projectDir: PROJECT_DIR }, null, 2));
-  await writeFile(plistPath, launchAgentPlist(runtimeId));
-  await execFile('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, plistPath]);
+  try {
+    await writeJsonAtomic(statePath, { appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, runtimeId, mode: 'launchd', pid: null, port, projectDir: PROJECT_DIR });
+    await writeTextAtomic(plistPath, launchAgentPlist(runtimeId));
+    await execFile('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, plistPath]);
+    return runtimeId;
+  } catch (error) {
+    if (previousState) await writeFile(statePath, previousState);
+    if (previousPlist) {
+      await writeFile(plistPath, previousPlist);
+      try { await execFile('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, plistPath]); } catch { /* preserve original failure */ }
+    }
+    throw error;
+  }
 }
 
 async function ensureDetachedRuntime({ forceRestart, current }) {
@@ -115,8 +155,14 @@ async function ensureDetachedRuntime({ forceRestart, current }) {
   });
   closeSync(outFd);
   closeSync(errFd);
-  await writeFile(statePath, JSON.stringify({ appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, runtimeId, mode: 'detached', pid: child.pid, port, projectDir: PROJECT_DIR }, null, 2));
-  child.unref();
+  try {
+    await writeJsonAtomic(statePath, { appId: APP_ID, runtimeContractVersion: RUNTIME_CONTRACT_VERSION, runtimeId, mode: 'detached', pid: child.pid, port, projectDir: PROJECT_DIR });
+    child.unref();
+  } catch (error) {
+    if (child.pid) await terminatePid(child.pid);
+    throw error;
+  }
+  return runtimeId;
 }
 
 async function stopRuntime() {
@@ -124,10 +170,18 @@ async function stopRuntime() {
   const saved = await readJson(statePath);
   const current = await health();
   if (saved?.runtimeId && current?.runtimeId === saved.runtimeId && Number(current.pid) > 0) await terminatePid(Number(current.pid));
+  await waitForPortFree();
 }
 
 async function readJson(filePath) {
   try { return JSON.parse(await readFile(filePath, 'utf8')); } catch { return null; }
+}
+
+async function writeJsonAtomic(filePath, value) { await writeTextAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`); }
+async function writeTextAtomic(filePath, value) {
+  const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try { await writeFile(temporary, value); await rename(temporary, filePath); }
+  finally { try { await unlink(temporary); } catch { /* already renamed */ } }
 }
 
 async function bootoutLaunchAgent() {
@@ -149,7 +203,9 @@ async function terminatePid(pid) {
 
 function isAlive(pid) { try { process.kill(pid, 0); return true; } catch { return false; } }
 
-async function waitForHealth() { for (let attempt = 0; attempt < 120; attempt += 1) { const value = await health(); if (isCurrentRuntime(value)) return value; await delay(250); } return null; }
+async function waitForHealth(expectedRuntimeId) { for (let attempt = 0; attempt < 120; attempt += 1) { const value = await health(); if (isCurrentRuntime(value) && value.runtimeId === expectedRuntimeId) return value; await delay(250); } return null; }
+
+async function waitForPortFree() { for (let attempt = 0; attempt < 40; attempt += 1) { if (!(await portListening())) return; await delay(100); } }
 
 async function portListening() {
   return new Promise((resolve) => {

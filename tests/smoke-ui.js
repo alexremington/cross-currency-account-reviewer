@@ -5,14 +5,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const fixture = fileURLToPath(new URL('./fixtures/accounts.csv', import.meta.url));
+const port = 5195;
 let playwright;
 try { playwright = await import('playwright'); } catch { try { playwright = await import('/Users/aremington/codex-workspace/apps/.shared-playwright/node_modules/playwright/index.js'); } catch { console.log('Playwright smoke skipped: install Playwright to run browser validation.'); process.exit(0); } }
 playwright = playwright.default || playwright;
-const server = spawn(process.execPath, ['server/server.js'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+const server = spawn(process.execPath, ['server/server.js'], { cwd: root, env: { ...process.env, CROSS_CURRENCY_REVIEWER_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
 try {
-  await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('server readiness timeout')), 10000); server.stdout.on('data', (chunk) => { if (String(chunk).includes('127.0.0.1:5190')) { clearTimeout(timer); resolve(); } }); server.on('error', reject); });
+  await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error('server readiness timeout')), 10000); server.stdout.on('data', (chunk) => { if (String(chunk).includes(`127.0.0.1:${port}`)) { clearTimeout(timer); resolve(); } }); server.stderr.on('data', (chunk) => { if (String(chunk).includes('EADDRINUSE')) { clearTimeout(timer); reject(new Error(`UI smoke port ${port} is already in use.`)); } }); server.on('error', reject); });
   const browser = await playwright.chromium.launch({ headless: true }); const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await page.goto('http://127.0.0.1:5190', { waitUntil: 'networkidle' }); await page.locator('#csv-input').setInputFiles(fixture); await page.getByRole('button', { name: 'Match now' }).click(); await page.locator('.queue-item').first().click();
+  await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' }); await page.locator('#csv-input').setInputFiles(fixture); await page.getByRole('button', { name: 'Match now' }).click(); await page.locator('.queue-item').first().click();
   await page.locator('[data-override="website"]').check(); await page.locator('[data-reason="website"]').fill('Confirmed by reviewer'); await page.getByRole('button', { name: 'Save proposal changes' }).click(); await page.locator('#parent-currency').selectOption('USD');
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export reviewed proposal' }).click(); await (await download).path();
   const text = await page.locator('.decision-score').textContent(); if (!text.includes('100')) throw new Error(`Expected visible 100 score, got ${text}`);
