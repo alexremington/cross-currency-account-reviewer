@@ -1,0 +1,21 @@
+{
+  "name": "cross-currency-account-reviewer",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Local-first reviewer for cross-currency Salesforce Account duplicates.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "check": "node scripts/check.js",
+    "check:windows": "node scripts/check-windows.js",
+    "test": "node --test tests/*.test.js",
+    "smoke:ui:local": "node tests/smoke-ui.js",
+    "sanity:results": "node scripts/sanity-results.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

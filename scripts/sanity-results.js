@@ -1,0 +1,13 @@
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { parseCsv } from '../core/csv.js';
+import { generatePairs } from '../core/scoring.js';
+const root = fileURLToPath(new URL('..', import.meta.url));
+const parsed = parseCsv(await readFile(new URL('../tests/fixtures/accounts.csv', import.meta.url), 'utf8'));
+if (parsed.errors.length) throw new Error(parsed.errors.join('\n'));
+const pairs = generatePairs(parsed.rows);
+const exact = pairs.filter((pair) => pair.score === 100);
+if (exact.length !== 1 || exact[0].currencyLeft === exact[0].currencyRight) throw new Error(`Sanity failure: expected one exact cross-currency pair, got ${exact.length}.`);
+if (pairs.some((pair) => pair.score === 100 && !pair.currenciesDiffer)) throw new Error('Sanity failure: same-currency pair scored 100.');
+if (pairs.some((pair) => pair.score === 100 && pair.reasonCodes[0] !== 'exact-cross-currency-identity')) throw new Error('Sanity failure: exact pair lacks semantic reason code.');
+console.log(`Results sanity passed: ${pairs.length} candidates, ${exact.length} exact cross-currency pair.`);

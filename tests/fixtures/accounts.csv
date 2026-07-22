@@ -1,0 +1,7 @@
+Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet,BillingCity,BillingCountry,LastModifiedDate
+001USD,Acme Media,USD,https://acme.example.com,2125550100,1 Main Street,New York,United States,2026-07-01
+001EUR,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main Street,New York,United States,2026-07-02
+002USD,Other Company,USD,https://other.example.com,2125550101,2 High Street,London,United Kingdom,2026-07-01
+002EUR,Other Company,EUR,https://different.example.com,2125550102,2 High Street,London,United Kingdom,2026-07-01
+003USD,Same Currency,USD,https://same.example.com,2125550103,3 High Street,London,United Kingdom,2026-07-01
+003USD2,Same Currency,USD,https://same.example.com,2125550103,3 High Street,London,United Kingdom,2026-07-01
