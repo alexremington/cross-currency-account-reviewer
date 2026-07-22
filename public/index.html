@@ -13,10 +13,16 @@
   </header>
   <main class="app-shell">
     <section class="panel import-panel" aria-labelledby="import-heading">
-      <div class="panel-heading"><div><h2 id="import-heading">1. Import Account CSV</h2><p>Required: Id, Name, CurrencyIsoCode.</p></div><label class="button button-primary file-button">Choose CSV<input id="csv-input" type="file" accept=".csv,text/csv"></label></div>
+      <div class="panel-heading"><div><h2 id="import-heading">1. Import Account CSV</h2><p>Upload a Salesforce Account export. The field guide below shows exactly what the reviewer uses.</p></div><label class="button button-primary file-button">Choose CSV<input id="csv-input" type="file" accept=".csv,text/csv"></label></div>
+      <details class="field-guide"><summary>Fields reviewed by this app</summary><div id="field-guide-content" class="field-guide-grid"></div></details>
       <div id="validation" class="message" role="status">No file loaded.</div>
       <div id="dataset-summary" class="summary-grid" hidden></div>
       <button id="match-button" class="button button-primary" type="button" disabled>Match now</button>
+    </section>
+    <section id="exports-panel" class="panel exports-panel" aria-labelledby="exports-heading" hidden>
+      <div class="panel-heading"><div><h2 id="exports-heading">Outputs</h2><p id="exports-summary">Match the dataset to create the complete score ledger.</p></div><span class="output-badge">Primary deliverable</span></div>
+      <div class="export-actions"><button id="export-ledger-csv" class="button button-primary" type="button" disabled><span aria-hidden="true">⇩</span> Download full score ledger CSV</button><button id="export-ledger-json" class="button" type="button" disabled><span aria-hidden="true">⇩</span> Download full score ledger JSON</button></div>
+      <p class="muted export-note">The ledger includes every scored candidate pair, whether or not a proposal has been reviewed. Proposal exports remain available inside each pair.</p>
     </section>
     <section class="workspace" aria-label="Review workspace">
       <aside class="panel queue-panel" aria-labelledby="queue-heading"><div class="panel-heading"><div><h2 id="queue-heading">2. Pair queue</h2><p id="queue-summary">Load a CSV to begin.</p></div></div><div id="queue" class="queue-list" tabindex="0"></div></aside>

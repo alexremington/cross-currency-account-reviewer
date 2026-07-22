@@ -24,6 +24,15 @@ This design direction was produced from the Hume review for the approved v1 stor
 - Required export and validation status must be announced to assistive technology.
 - State clearly that v1 performs export only and never writes to Salesforce.
 
+## Score-ledger output and maturity pass
+
+- After matching, show a named Outputs section with the full score ledger as the primary deliverable. It must be downloadable as CSV and JSON without selecting or saving a proposal.
+- State the exact scored-pair count and distinguish the complete ledger from the reviewed-parent export.
+- The ledger must preserve pair identity, source rows, scores, bands, reasons, and raw/normalized evidence for every scoring field.
+- Keep import guidance grouped into required, scored, and imported-but-not-scored fields. Explain the nonblank, different-currency candidate rule.
+- The queue should be scan-friendly, evidence rows should have explicit column headers and text statuses, and source/proposal fields should use human-readable labels.
+- Preserve generous spacing, visible focus, keyboard operation, labelled scroll regions, and no clipped content at 320px and 390px widths.
+
 ## Acceptance criteria
 
 - A valid exact cross-currency pair visibly shows score 100 and the reason `Exact normalized identity; currency differs`.

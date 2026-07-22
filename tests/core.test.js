@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseCsv, normalizeWebsite } from '../core/csv.js';
 import { generatePairs, scorePair } from '../core/scoring.js';
 import { buildProposal } from '../core/proposals.js';
-import { buildExports } from '../core/export.js';
+import { buildExports, buildScoreLedger } from '../core/export.js';
 
 const fixture = `Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main`;
 
@@ -42,4 +42,20 @@ test('proposal preserves source provenance and exports reconcile', () => {
   const parsed = parseCsv(fixture); const pair = generatePairs(parsed.rows)[0]; const proposal = buildProposal(parsed.rows[0], parsed.rows[1], pair, { parentCurrency: 'USD' });
   assert.equal(proposal.fields.name.sourceId, 'A'); assert.equal(proposal.parentCurrency, 'USD');
   const result = buildExports([{ pair, proposal }]); assert.match(result.parentCsv, /sourceAccountIds/); assert.match(result.associationCsv, /A/); assert.equal(result.audit.length, 1); assert.match(result.auditJson, /"records"/);
+});
+
+test('named regression: full score ledger reconciles every scored pair and preserves evidence', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet,LastModifiedDate\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main,2025-01-01\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main,2025-01-02');
+  const pairs = generatePairs(parsed.rows); const result = buildScoreLedger(pairs, parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
+  assert.equal(result.records.length, pairs.length); assert.equal(result.records[0].score, 100); assert.equal(result.records[0].evidence.length, 5); assert.ok(result.records[0].evidence.some((item) => item.field === 'address' && item.status === 'matched'));
+  assert.match(result.csv, /pairKey/); assert.doesNotMatch(result.csv, /2025-01-01/); assert.match(result.json, /cross-currency-score-ledger\/v1/); assert.equal(result.source.recordCount, 2);
+});
+
+test('named regression: ledger preserves source cells and complete zero-pair schema', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website\nA," Acme Media ",USD," https://acme.example.com "\nB,Other Media,USD,https://other.example.com');
+  const empty = buildScoreLedger([], parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
+  assert.match(empty.csv, /nameLeftRaw/); assert.match(empty.csv, /billingAddressRightNormalized/); assert.match(empty.csv, /ultimateParentAccountStatus/);
+  const cross = parseCsv('Id,Name,CurrencyIsoCode,Website\nB,Acme Media,EUR,https://www.acme.example.com\nA," Acme Media ",USD," https://acme.example.com "');
+  const ledger = buildScoreLedger(generatePairs(cross.rows), cross.rows, { fileName: 'accounts.csv' });
+  assert.equal(ledger.records[0].pairKey, 'A|B'); assert.equal(ledger.records[0].left.name, ' Acme Media '); assert.equal(ledger.records[0].evidence.find((item) => item.field === 'name').left.raw, ' Acme Media ');
 });

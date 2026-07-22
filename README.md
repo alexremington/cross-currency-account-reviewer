@@ -25,11 +25,11 @@ macOS service state and logs are stored outside the repository under `~/Library/
 
 ## CSV contract
 
-Required headers are `Id`, `Name`, and `CurrencyIsoCode`. Optional evidence headers include `Website`, `Phone`, `BillingStreet`, `BillingCity`, `BillingState`, `BillingPostalCode`, `BillingCountry`, `Ultimate_Parent_Account__c`, and `LastModifiedDate`. Salesforce export headers are accepted case-insensitively.
+Required headers are `Id`, `Name`, and `CurrencyIsoCode`. The scorer reviews `Name`, `CurrencyIsoCode`, `Website`, `Phone`, the composite billing address (`BillingStreet`, `BillingCity`, `BillingState`, `BillingPostalCode`, `BillingCountry`), and `Ultimate_Parent_Account__c`. `LastModifiedDate` is accepted and preserved as source data, but does not affect scoring. Only records with two nonblank, different currencies become candidates. Salesforce export headers are accepted case-insensitively.
 
 ## Workflow
 
-Import a CSV, validate it, click **Match now**, inspect the prioritized pair queue, review the proposed parent, optionally override fields with a reason, and export the parent proposal, child association, and audit files. A score of 100 is reserved for exact normalized identity evidence with different currencies.
+Import a CSV, validate it, click **Match now**, download the complete score ledger, inspect the prioritized pair queue, review the proposed parent, optionally override fields with a reason, and export the reviewed parent proposal, child association, and audit files. The score ledger contains every scored pair, including pairs that have not been reviewed. A score of 100 is reserved for exact normalized identity evidence with different currencies.
 
 ## Development
 

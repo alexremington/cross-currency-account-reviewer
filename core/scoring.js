@@ -1,4 +1,4 @@
-import { normalizeAddress, normalizePhone, normalizeText, normalizeWebsite } from './csv.js';
+import { REVIEW_FIELD_CATALOG, normalizeAddress, normalizePhone, normalizeText, normalizeWebsite } from './csv.js';
 
 const CORROBORATORS = [
   ['website', normalizeWebsite],
@@ -12,7 +12,8 @@ export function comparableEvidence(left, right) {
   for (const [field, normalizer] of CORROBORATORS) {
     const leftValue = field === 'address' ? normalizer(left) : normalizer(left[field]);
     const rightValue = field === 'address' ? normalizer(right) : normalizer(right[field]);
-    if (leftValue || rightValue) evidence.push({ field, label: field === 'address' ? 'Billing address' : field, left: leftValue, right: rightValue, required: false });
+    const catalog = REVIEW_FIELD_CATALOG.find((item) => item.key === field);
+    evidence.push({ field, label: catalog?.label || field, left: leftValue, right: rightValue, required: false });
   }
   return evidence;
 }
@@ -61,7 +62,8 @@ export function generatePairs(records) {
   const pairs = [];
   for (const block of blocks.values()) for (let i = 0; i < block.length; i += 1) for (let j = i + 1; j < block.length; j += 1) {
     if (!block[i].currencyisocode || !block[j].currencyisocode || block[i].currencyisocode.toUpperCase() === block[j].currencyisocode.toUpperCase()) continue;
-    pairs.push(scorePair(block[i], block[j]));
+    const ordered = [block[i], block[j]].sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    pairs.push(scorePair(ordered[0], ordered[1]));
   }
   return pairs.sort((a, b) => b.score - a.score || `${a.leftId}|${a.rightId}`.localeCompare(`${b.leftId}|${b.rightId}`));
 }
