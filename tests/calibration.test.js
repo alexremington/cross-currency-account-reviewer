@@ -22,6 +22,9 @@ test('named regression: dynamic calibration emits private raw and sanitized sema
   const raw = JSON.parse(await readFile(rawPath, 'utf8')); const sanitizedText = await readFile(sanitizedPath, 'utf8'); const sanitized = JSON.parse(sanitizedText);
   assert.ok(raw.cases.length > 0); assert.ok(raw.cases[0].left.id); assert.ok(sanitized.cases[0].caseId.startsWith('case-'));
   assert.ok(Object.keys(sanitized.cases[0].fieldScores).length > 0);
+  assert.ok(raw.cases.every((item) => item.left.currencyisocode && item.right.currencyisocode && item.left.currencyisocode !== item.right.currencyisocode));
+  assert.ok(raw.cases.every((item) => Number.isFinite(item.crossPair.score)));
+  assert.match(sanitized.selectionPolicy, /prefer Cross Currency scores/);
   assert.ok(['matched', 'conflict', 'blank'].includes(sanitized.cases[0].evidenceStatuses.name));
   assert.doesNotMatch(sanitizedText, /"left"|"right"|"leftId"|"rightId"|A\|B/);
   assert.equal(sanitized.sourceArtifact, 'private'); assert.equal(sanitized.ledgerArtifact, 'private');
