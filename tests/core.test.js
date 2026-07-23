@@ -32,7 +32,7 @@ test('named regression: pinned Account model metadata and lanes are emitted', ()
   assert.equal(pair.lane, 'exact-confidence');
   assert.equal(pair.exactConfidenceRule, 'exact-name-website-address-phone');
   assert.equal(pair.accountNameRelationship, 'same-level-exact');
-  assert.equal(pair.operationalScore, 100);
+  assert.equal(pair.operationalScore, pair.score);
   assert.ok(pair.fieldScores.name === 1 && pair.fieldScores.website === 1);
 });
 
@@ -49,7 +49,7 @@ test('named parity fixtures: mature Account lanes and contradiction metadata rem
     const pair = scorePair(fixtureCase.left, fixtureCase.right);
     assert.equal(pair.lane, fixtureCase.expected.lane, fixtureCase.name);
     assert.equal(pair.accountNameRelationship, fixtureCase.expected.relationship, fixtureCase.name);
-    if (fixtureCase.expected.operationalScore != null) assert.equal(pair.operationalScore, fixtureCase.expected.operationalScore, fixtureCase.name);
+    assert.equal(pair.operationalScore, pair.score, fixtureCase.name);
     if (fixtureCase.expected.hasConflict) assert.ok(pair.reasonCodes.includes('conflicting-evidence'), fixtureCase.name);
   }
 });
@@ -129,7 +129,19 @@ test('named regression: valid unequal Website remains a conflict while Renaissan
   const right = { ...left, id: 'REN-EUR', currencyisocode: 'EUR', website: 'renaissancecharter.org' };
   const pair = scorePair(left, right);
   assert.equal(pair.exactConfidenceRule, 'exact-name-address-phone');
-  assert.equal(pair.operationalScore, 96);
+  assert.equal(pair.operationalScore, pair.score);
+  assert.ok(pair.score < 96);
   assert.equal(pair.evidence.find((item) => item.field === 'website').status, 'conflict');
   assert.ok(pair.reasonCodes.includes('conflicting-evidence'));
+});
+
+test('named regression: Account website sentinels are invalid and unavailable', () => {
+  const left = { id: 'SENTINEL-USD', name: 'Duke Policy', currencyisocode: 'USD', website: '0' };
+  const right = { id: 'SENTINEL-EUR', name: 'Duke Policy', currencyisocode: 'EUR', website: 'duke.example.org' };
+  const pair = scorePair(left, right);
+  const website = pair.evidence.find((item) => item.field === 'website');
+  assert.equal(website.status, 'invalid');
+  assert.equal(website.leftRaw, '0');
+  assert.match(website.leftInvalidReason, /sentinel/);
+  assert.ok(pair.reasons.includes('Website ignored as invalid'));
 });

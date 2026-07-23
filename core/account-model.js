@@ -2,7 +2,7 @@ import { normalizeAddress, normalizePhone, normalizeText, normalizeWebsite } fro
 
 // Pinned from Duplicate Reviewer Account model: recalibrate-account-scoring-model
 // plus account-three-lane-score-distribution and account-hierarchy-aware-top-lane.
-export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-20';
+export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-22-continuous-score';
 export const MAX_CROSS_CURRENCY_CANDIDATE_PAIRS = 250000;
 
 const FIELD_WEIGHTS = {
@@ -132,11 +132,12 @@ function phoneScore(left, right) {
 function validateWebsite(raw) {
   const value = String(raw ?? '').trim();
   if (!value) return { status: 'blank', value: '', raw: '', reason: '' };
+  if (/^(?:0|n\/a|na|none|null|unknown|no website found|not available)$/i.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'website is a sentinel or unavailable value' };
   if (/[\s@]/.test(value) || /^\+?[\d().\s-]{7,}$/.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'website-like value is phone-like or email-like' };
   try {
     const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
-    if (!hostname.includes('.') || !/^[a-z0-9.-]+$/i.test(hostname) || hostname.startsWith('.') || hostname.endsWith('.')) return { status: 'invalid', value: '', raw: value, reason: 'website has no valid hostname' };
+    if (hostname === '0.0.0.0' || !hostname.includes('.') || !/^[a-z0-9.-]+$/i.test(hostname) || hostname.startsWith('.') || hostname.endsWith('.')) return { status: 'invalid', value: '', raw: value, reason: 'website has no valid hostname' };
     return { status: 'valid', value: hostname, raw: value, reason: '' };
   } catch {
     return { status: 'invalid', value: '', raw: value, reason: 'website is not a valid URL or hostname' };
@@ -308,9 +309,7 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   const exactConfidenceRule = exactRule(scores, relationship);
   const intermediateConfidenceRule = exactConfidenceRule ? '' : intermediateRule(scores, relationship);
   const lane = exactConfidenceRule ? 'exact-confidence' : intermediateConfidenceRule ? 'intermediate-confidence' : 'weighted-review';
-  const operationalScore = exactConfidenceRule
-    ? EXACT_RULE_SCORES[exactConfidenceRule]
-    : intermediateConfidenceRule ? INTERMEDIATE_RULE_SCORES[intermediateConfidenceRule] : Math.min(weighted.value, 89);
+  const canonicalScore = weighted.value;
   const exactIdentity = Boolean(exactConfidenceRule);
   const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9);
   const contradictionCategory = hasConflict ? 'field-conflict' : '';
@@ -330,7 +329,7 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   if (left.phoneEvidence.status === 'invalid' || right.phoneEvidence.status === 'invalid') reasons.push('Phone ignored as invalid');
   reasons.push(`Cross-currency eligibility: ${currencyLeft} vs ${currencyRight}`);
   return {
-    leftId: left.id, rightId: right.id, score: weighted.value, value: weighted.value, operationalScore,
+    leftId: left.id, rightId: right.id, score: canonicalScore, value: canonicalScore, operationalScore: canonicalScore,
     band: lane, lane, exactIdentity, currenciesDiffer, currencyLeft, currencyRight,
     modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, accountNameRelationship: relationship.kind,
     accountNameRelationshipReason: relationship.reason, contradictionCategory, contradictionReason: hasConflict ? 'One or more comparable identity fields conflict.' : '', exactConfidenceRule, intermediateConfidenceRule,

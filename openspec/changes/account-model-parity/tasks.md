@@ -9,3 +9,5 @@
 - [x] Run Cross-Currency checks, Windows checks, and Playwright smoke coverage.
 - [x] Run Duplicate Reviewer Account proof coverage; reviewer/qa-ux tool surfaces were not available in-session, so the main thread performed the focused source and user-path review.
 - [x] Update release documentation and mark this change complete after clean-tree closeout.
+- [x] Remove exact/intermediate numeric score floors from the canonical score while retaining advisory lane metadata.
+- [x] Add named score-coherence and sentinel sanity checks.
