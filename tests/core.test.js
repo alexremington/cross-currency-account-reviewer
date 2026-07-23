@@ -111,3 +111,25 @@ test('named regression: ledger preserves source cells and complete zero-pair sch
   const ledger = buildScoreLedger(generatePairs(cross.rows), cross.rows, { fileName: 'accounts.csv' });
   assert.equal(ledger.records[0].pairKey, 'A|B'); assert.equal(ledger.records[0].left.id, 'A'); assert.equal(ledger.records[0].evidence.find((item) => item.field === 'name').left.raw, ' Acme Media '); assert.match(ledger.summaryJson, /pairColumns/);
 });
+
+test('named regression: invalid typed Account values are auditable and unavailable', () => {
+  const left = { id: 'INVALID-WEBSITE', name: 'Renaissance Schools', currencyisocode: 'USD', website: '2125550100', phone: '2125550100', billingstreet: '1 Main', billingcity: 'New York', billingstate: 'NY', billingpostalcode: '10001', billingcountry: 'US' };
+  const right = { id: 'VALID-WEBSITE', name: 'Renaissance Schools', currencyisocode: 'EUR', website: 'rencharters.org', phone: '2125550100', billingstreet: '1 Main', billingcity: 'New York', billingstate: 'NY', billingpostalcode: '10001', billingcountry: 'US' };
+  const pair = scorePair(left, right);
+  const website = pair.evidence.find((item) => item.field === 'website');
+  assert.equal(website.status, 'invalid');
+  assert.equal(website.leftRaw, '2125550100');
+  assert.match(website.leftInvalidReason, /phone-like/);
+  assert.ok(pair.reasons.includes('Website ignored as invalid'));
+  assert.equal(pair.exactConfidenceRule, 'exact-name-address-phone');
+});
+
+test('named regression: valid unequal Website remains a conflict while Renaissance bundle promotes', () => {
+  const left = { id: 'REN-USD', name: 'Renaissance Schools', currencyisocode: 'USD', website: 'rencharters.org', phone: '2125550100', billingstreet: '1 Main', billingcity: 'New York', billingstate: 'NY', billingpostalcode: '10001', billingcountry: 'US', ultimate_parent_account__c: 'Renaissance Schools' };
+  const right = { ...left, id: 'REN-EUR', currencyisocode: 'EUR', website: 'renaissancecharter.org' };
+  const pair = scorePair(left, right);
+  assert.equal(pair.exactConfidenceRule, 'exact-name-address-phone');
+  assert.equal(pair.operationalScore, 96);
+  assert.equal(pair.evidence.find((item) => item.field === 'website').status, 'conflict');
+  assert.ok(pair.reasonCodes.includes('conflicting-evidence'));
+});

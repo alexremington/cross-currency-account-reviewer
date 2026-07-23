@@ -129,6 +129,29 @@ function phoneScore(left, right) {
   return a === b || a.endsWith(b) || b.endsWith(a) ? 1 : 0;
 }
 
+function validateWebsite(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return { status: 'blank', value: '', raw: '', reason: '' };
+  if (/[\s@]/.test(value) || /^\+?[\d().\s-]{7,}$/.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'website-like value is phone-like or email-like' };
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
+    if (!hostname.includes('.') || !/^[a-z0-9.-]+$/i.test(hostname) || hostname.startsWith('.') || hostname.endsWith('.')) return { status: 'invalid', value: '', raw: value, reason: 'website has no valid hostname' };
+    return { status: 'valid', value: hostname, raw: value, reason: '' };
+  } catch {
+    return { status: 'invalid', value: '', raw: value, reason: 'website is not a valid URL or hostname' };
+  }
+}
+
+function validatePhone(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return { status: 'blank', value: '', raw: '', reason: '' };
+  if (/[a-z@/]/i.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'phone contains letters, email syntax, or URL syntax' };
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15 || /[^\d\s().+\-extx]/i.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'phone has invalid digit length or characters' };
+  return { status: 'valid', value: normalizePhone(value), raw: value, reason: '' };
+}
+
 function addressScore(left, right) {
   const score = similarity(left, right);
   return score == null ? null : score;
@@ -150,11 +173,17 @@ function accountNameRelationship(nameScore, left, right) {
 }
 
 function adapt(record) {
+  const websiteEvidence = validateWebsite(record.website);
+  const phoneEvidence = validatePhone(record.phone);
   return {
     ...record,
     name: record.name || '',
-    website: record.website || '',
-    phone: record.phone || '',
+    rawWebsite: String(record.website ?? ''),
+    rawPhone: String(record.phone ?? ''),
+    website: websiteEvidence.status === 'valid' ? websiteEvidence.value : '',
+    phone: phoneEvidence.status === 'valid' ? phoneEvidence.value : '',
+    websiteEvidence,
+    phoneEvidence,
     billingStreet: record.billingstreet || '',
     billingCity: record.billingcity || '',
     billingState: record.billingstate || '',
@@ -210,8 +239,9 @@ function weightedScore(scores, left, right) {
 
 function exactRule(scores, relationship) {
   if (!['same-level-exact', 'same-level-equivalent'].includes(relationship.kind) || scores.name !== 1) return '';
-  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9)) return '';
   const address = billingAddressScore(scores) >= 0.9;
+  const websiteConflictAllowed = scores.website != null && scores.website < 0.9 && address && scores.phone === 1;
+  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9 && !(field === 'website' && websiteConflictAllowed))) return '';
   if (scores.website === 1 && address && scores.phone === 1) return 'exact-name-website-address-phone';
   if (scores.website === 1 && address && scores.ultimateParentAccount === 1) return 'exact-name-website-address-ultimate-parent-evidence';
   if (scores.website === 1 && address) return 'exact-name-website-address';
@@ -237,14 +267,18 @@ function intermediateRule(scores, relationship) {
 function evidence(left, right, scores) {
   const values = [
     ['name', 'Account Name', left.name, right.name, scores.name],
-    ['website', 'Website', left.website, right.website, scores.website],
-    ['phone', 'Phone', left.phone, right.phone, scores.phone],
+    ['website', 'Website', left.rawWebsite, right.rawWebsite, scores.website, left.websiteEvidence, right.websiteEvidence],
+    ['phone', 'Phone', left.rawPhone, right.rawPhone, scores.phone, left.phoneEvidence, right.phoneEvidence],
     ['address', 'Billing address', normalizeAddress(left), normalizeAddress(right), billingAddressScore(scores)],
     ['ultimate_parent_account__c', 'Ultimate Parent Account', left.ultimate_parent_account__c, right.ultimate_parent_account__c, scores.ultimateParentAccount]
   ];
-  return values.map(([field, label, rawLeft, rawRight, score]) => ({
+  return values.map(([field, label, rawLeft, rawRight, score, leftEvidence, rightEvidence]) => ({
     field, label, left: normalizeText(rawLeft), right: normalizeText(rawRight),
-    status: !rawLeft || !rawRight ? 'blank' : score >= 0.9 ? 'matched' : 'conflict', score
+    status: leftEvidence || rightEvidence
+      ? (leftEvidence.status === 'invalid' || rightEvidence.status === 'invalid' ? 'invalid' : leftEvidence.status !== 'valid' || rightEvidence.status !== 'valid' ? 'blank' : score === 1 ? 'matched' : 'conflict')
+      : (!rawLeft || !rawRight ? 'blank' : score >= 0.9 ? 'matched' : 'conflict'),
+    score, leftRaw: String(rawLeft ?? ''), rightRaw: String(rawRight ?? ''),
+    leftInvalidReason: leftEvidence?.reason || '', rightInvalidReason: rightEvidence?.reason || ''
   }));
 }
 
@@ -292,6 +326,8 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   if (relationship.kind === 'scope-divergence') reasons.push('Different account scope');
   if (relationship.kind === 'hierarchy-expansion') reasons.push('Different branch or department under parent');
   if (lane === 'weighted-review') reasons.push('Missing exact-confidence corroboration bundle');
+  if (left.websiteEvidence.status === 'invalid' || right.websiteEvidence.status === 'invalid') reasons.push('Website ignored as invalid');
+  if (left.phoneEvidence.status === 'invalid' || right.phoneEvidence.status === 'invalid') reasons.push('Phone ignored as invalid');
   reasons.push(`Cross-currency eligibility: ${currencyLeft} vs ${currencyRight}`);
   return {
     leftId: left.id, rightId: right.id, score: weighted.value, value: weighted.value, operationalScore,
@@ -309,8 +345,10 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
 
 function blockingKeys(record) {
   const name = normalizeText(record.name);
-  const website = normalizeWebsite(record.website);
-  const phone = normalizePhone(record.phone);
+  const websiteEvidence = validateWebsite(record.website);
+  const phoneEvidence = validatePhone(record.phone);
+  const website = websiteEvidence.status === 'valid' ? websiteEvidence.value : '';
+  const phone = phoneEvidence.status === 'valid' ? phoneEvidence.value : '';
   const address = normalizeAddress(record);
   const parent = normalizeText(record.ultimate_parent_account__c);
   const addressParts = [record.billingstreet, record.billingcity, record.billingstate, record.billingpostalcode].filter(meaningful);
