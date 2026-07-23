@@ -21,6 +21,8 @@ test('named regression: dynamic calibration emits private raw and sanitized sema
   await runNode('scripts/build-calibration-sample.js', ['--source', sourcePath, '--ledger', ledgerPath, '--raw-out', rawPath, '--sanitized-out', sanitizedPath, '--seed', 'test-seed', '--quotas', JSON.stringify({ exactSameLevelIdentity: 2, randomControls: 2 })]);
   const raw = JSON.parse(await readFile(rawPath, 'utf8')); const sanitizedText = await readFile(sanitizedPath, 'utf8'); const sanitized = JSON.parse(sanitizedText);
   assert.ok(raw.cases.length > 0); assert.ok(raw.cases[0].left.id); assert.ok(sanitized.cases[0].caseId.startsWith('case-'));
+  assert.ok(Object.keys(sanitized.cases[0].fieldScores).length > 0);
+  assert.ok(['matched', 'conflict', 'blank'].includes(sanitized.cases[0].evidenceStatuses.name));
   assert.doesNotMatch(sanitizedText, /"left"|"right"|"leftId"|"rightId"|A\|B/);
   assert.equal(sanitized.sourceArtifact, 'private'); assert.equal(sanitized.ledgerArtifact, 'private');
 });
