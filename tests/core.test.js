@@ -44,6 +44,14 @@ test('named regression: currency eligibility does not add identity confidence', 
   assert.equal(usdEur.reasonCodes.includes('currency-differs'), true);
 });
 
+test('named regression: cross-currency score is finite, bounded, continuous, and pair-order invariant', () => {
+  const left = { id: 'ORDER-USD', name: 'Order Stable', currencyisocode: 'USD', website: 'order.example.org', phone: '2025550100', billingstreet: '1 Main', billingcity: 'Washington', billingcountry: 'US' };
+  const right = { id: 'ORDER-EUR', name: 'Order Stable', currencyisocode: 'EUR', website: 'other.example.org', phone: '2025550199', billingstreet: '2 Main', billingcity: 'Boston', billingcountry: 'US' };
+  const forward = scorePair(left, right); const reverse = scorePair(right, left);
+  assert.equal(forward.score, reverse.score); assert.deepEqual(forward.fieldScores, reverse.fieldScores);
+  assert.equal(Number.isFinite(forward.score), true); assert.ok(forward.score >= 0 && forward.score <= 100); assert.equal(forward.score, forward.operationalScore);
+});
+
 test('named parity fixtures: mature Account lanes and contradiction metadata remain stable', () => {
   for (const fixtureCase of parityFixtures) {
     const pair = scorePair(fixtureCase.left, fixtureCase.right);

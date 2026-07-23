@@ -3,3 +3,4 @@ coverage/
 .DS_Store
 Output/
 *.local.*
+data/calibration/raw-*.json

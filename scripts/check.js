@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const required = ['README.md', 'public/index.html', 'public/app.js', 'public/styles.css', 'core/csv.js', 'core/scoring.js', 'core/proposals.js', 'core/export.js'];
+const required = ['README.md', 'public/index.html', 'public/app.js', 'public/styles.css', 'core/csv.js', 'core/scoring.js', 'core/proposals.js', 'core/export.js', 'docs/account-parity-matrix.md', 'scripts/build-calibration-sample.js', 'scripts/evaluate-calibration.js'];
 const forbidden = /(SF_ACCESS_TOKEN|sf org display|salesforce-report-latest|OneDrive-POLITICO|(?:^|[\\/])\.env(?:[\\/]|$))/i;
 for (const relative of required) await readFile(join(root, relative));
 const files = [];
