@@ -1,6 +1,7 @@
-- [ ] Add and validate the parity matrix with one disposition per difference.
+- [x] Add and validate the parity matrix with one disposition per difference.
+- [x] Sync sparse-name, hierarchy/scope, address, abbreviation/alias, and structured partial-phone Account semantics from the canonical scorer.
 - [ ] Add deterministic dynamic calibration sampling and privacy-safe semantic corpus generation.
 - [ ] Add aggregate calibration metrics and required-stratum coverage checks.
-- [ ] Add named currency invariance, typed-value, order-invariance, bounded-continuous-score, and export-shape regressions.
-- [ ] Run Cross Currency test, check, Windows, result sanity, launcher smoke, and UI smoke gates.
-- [ ] Record release note, commit SHA, and residual risk at closeout.
+- [x] Add named currency invariance, typed-value, order-invariance, bounded-continuous-score, export-shape, and Contact-isolation regressions.
+- [x] Run Cross Currency test, check, Windows, result sanity, and UI smoke gates. Launcher smoke remains environment-blocked by launchctl bootstrap I/O failure.
+- [x] Record release note, commit SHA, and residual risk at closeout.

@@ -49,6 +49,11 @@ const HIERARCHY_TOKENS = new Set([
 ]);
 
 const SCOPE_TOKENS = new Set(['foundation', 'fund', 'holding', 'holdings', 'llc', 'ltd', 'plc', 'trust']);
+const GENERIC_NAME_EXPANSION_TOKENS = new Set(['association', 'company', 'corporation', 'group', 'institute', 'organization', 'school', 'university']);
+const NAME_TOKEN_ALIASES = new Map([
+  ['assoc', 'association'], ['co', 'company'], ['corp', 'corporation'], ['dept', 'department'],
+  ['intl', 'international'], ['org', 'organization'], ['sch', 'school'], ['univ', 'university']
+]);
 const PLACEHOLDER_VALUES = new Set(['-', '--', '---', 'n a', 'na', 'none', 'null', 'unknown', 'not available']);
 
 const EXACT_RULE_SCORES = {
@@ -73,6 +78,8 @@ const INTERMEDIATE_RULE_SCORES = {
 function clamp(value) { return Math.max(0, Math.min(100, Math.round(value))); }
 function tokens(value) { return normalizeText(value).split(' ').filter(Boolean); }
 function tokenSet(value) { return new Set(tokens(value)); }
+function canonicalNameTokens(value) { return tokens(value).map((token) => NAME_TOKEN_ALIASES.get(token) || token); }
+function canonicalName(value) { return canonicalNameTokens(value).join(' '); }
 function meaningful(value) {
   const normalized = normalizeText(value);
   return Boolean(normalized && !PLACEHOLDER_VALUES.has(normalized));
@@ -94,6 +101,13 @@ function similarity(left, right) {
   const prefix = compactA.startsWith(compactB) || compactB.startsWith(compactA) ? 0.96 : 0;
   const edit = normalizedEditSimilarity(compactA, compactB);
   return Math.max(tokenScore, prefix, edit);
+}
+
+function accountNameSimilarity(left, right) {
+  if (!meaningful(left) || !meaningful(right)) return null;
+  const a = canonicalName(left); const b = canonicalName(right);
+  if (a === b) return 1;
+  return similarity(a, b);
 }
 
 function normalizedEditSimilarity(left, right) {
@@ -126,7 +140,22 @@ function phoneScore(left, right) {
   if (!left || !right) return null;
   const a = normalizePhone(left); const b = normalizePhone(right);
   if (!a || !b) return null;
-  return a === b || a.endsWith(b) || b.endsWith(a) ? 1 : 0;
+  if (a === b) return 1;
+  const sharedSuffix = a.endsWith(b) || b.endsWith(a);
+  if (sharedSuffix && Math.min(a.length, b.length) >= 7) return 0.75;
+  if (a.slice(0, 6) === b.slice(0, 6) && a.length >= 7 && b.length >= 7) return 0.5;
+  // An area code alone is too common to be positive identity evidence.
+  if (a.slice(0, 3) === b.slice(0, 3) && a.length >= 7 && b.length >= 7) return 0;
+  return 0;
+}
+
+function phoneMatchKind(left, right, score) {
+  if (score === 1) return 'exact';
+  if (score >= 0.75) return 'partial-suffix';
+  if (score >= 0.5) return 'partial-prefix';
+  if (score > 0) return 'partial-area';
+  if (left && right) return 'conflict';
+  return 'blank';
 }
 
 function validateWebsite(raw) {
@@ -160,16 +189,21 @@ function addressScore(left, right) {
 
 function accountNameRelationship(nameScore, left, right) {
   if (!meaningful(left.name) || !meaningful(right.name)) return { kind: 'missing-name', reason: 'Missing usable account name.' };
-  const leftTokens = tokenSet(left.name); const rightTokens = tokenSet(right.name);
+  const leftTokens = new Set(canonicalNameTokens(left.name)); const rightTokens = new Set(canonicalNameTokens(right.name));
   if (nameScore === 1) return { kind: 'same-level-exact', reason: 'Exact normalized account name.' };
   const shorter = leftTokens.size <= rightTokens.size ? leftTokens : rightTokens;
   const longer = leftTokens.size <= rightTokens.size ? rightTokens : leftTokens;
   const extra = [...longer].filter((item) => !shorter.has(item));
-  if (nameScore >= 0.95 && extra.some((item) => HIERARCHY_TOKENS.has(item))) {
+  const contained = extra.length > 0 && [...shorter].every((item) => longer.has(item));
+  if (contained && extra.some((item) => HIERARCHY_TOKENS.has(item))) {
     return { kind: 'hierarchy-expansion', reason: `Hierarchy-bearing name expansion: ${extra.join(', ')}.` };
   }
+  if (contained && extra.some((item) => SCOPE_TOKENS.has(item))) return { kind: 'scope-divergence', reason: 'Account names indicate different organizational scope.' };
+  const materialExtra = extra.filter((item) => !GENERIC_NAME_EXPANSION_TOKENS.has(item) && !HIERARCHY_TOKENS.has(item) && !SCOPE_TOKENS.has(item));
+  if (contained && materialExtra.length && (materialExtra.some((item) => item.length <= 3) || materialExtra.length >= 2)) {
+    return { kind: 'material-token-conflict', reason: `Materially different name token: ${materialExtra.join(', ')}.` };
+  }
   if (nameScore >= 0.95) return { kind: 'same-level-equivalent', reason: 'Near-exact same-level account names.' };
-  if (extra.some((item) => SCOPE_TOKENS.has(item))) return { kind: 'scope-divergence', reason: 'Account names indicate different organizational scope.' };
   return { kind: 'unknown-near-name', reason: '' };
 }
 
@@ -197,7 +231,7 @@ function adapt(record) {
 
 function fieldScores(left, right) {
   return {
-    name: similarity(left.name, right.name),
+    name: accountNameSimilarity(left.name, right.name),
     website: websiteScore(left.website, right.website),
     phone: phoneScore(left.phone, right.phone),
     billingStreet: addressScore(left.billingStreet, right.billingStreet),
@@ -212,8 +246,16 @@ function fieldScores(left, right) {
 
 function billingAddressScore(scores) {
   const fields = ['billingStreet', 'billingCity', 'billingState', 'billingPostalCode', 'billingCountry'];
+  const anchorFields = ['billingStreet', 'billingCity', 'billingState', 'billingPostalCode'];
+  if (!anchorFields.some((field) => scores[field] != null)) return 0;
   const values = fields.map((field) => scores[field]).filter((value) => value != null);
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function strongBillingAddressScore(scores) {
+  const street = scores.billingStreet;
+  const locality = [scores.billingPostalCode, scores.billingCity, scores.billingState].some((score) => score === 1);
+  return street != null && street >= 0.82 && (locality || street === 1);
 }
 
 function weightedScore(scores, left, right) {
@@ -228,21 +270,22 @@ function weightedScore(scores, left, right) {
     denominator += weight * factor;
   }
   let value = denominator ? (numerator / denominator) * 100 : 0;
-  const conflicts = Object.entries(scores).filter(([field, score]) => score != null && score < 0.9 && field !== 'accountCurrency');
+  const conflicts = Object.entries(scores).filter(([field, score]) => score != null && score < 0.9 && field !== 'accountCurrency' && !(field === 'phone' && score > 0));
   for (const [field] of conflicts) value -= 12 * (CONTRADICTION_SEVERITY[field] || 0.15);
   const nameRelationship = accountNameRelationship(scores.name || 0, left, right);
   if (nameRelationship.kind === 'hierarchy-expansion') value = Math.min(value, 83);
   if (nameRelationship.kind === 'scope-divergence') value = Math.min(value, 78);
-  const hasCorroboration = [scores.website, scores.phone, billingAddressScore(scores), scores.ultimateParentAccount].some((score) => score != null && score >= 0.9);
+  if (nameRelationship.kind === 'material-token-conflict') value = Math.min(value, 79);
+  const hasCorroboration = [scores.website, scores.phone, scores.ultimateParentAccount].some((score) => score != null && score >= 0.9) || strongBillingAddressScore(scores);
   if ((scores.name || 0) >= 0.95 && !hasCorroboration) value = Math.min(value, 89);
   return { value: clamp(value), discounted, nameRelationship };
 }
 
 function exactRule(scores, relationship) {
   if (!['same-level-exact', 'same-level-equivalent'].includes(relationship.kind) || scores.name !== 1) return '';
-  const address = billingAddressScore(scores) >= 0.9;
+  const address = strongBillingAddressScore(scores);
   const websiteConflictAllowed = scores.website != null && scores.website < 0.9 && address && scores.phone === 1;
-  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9 && !(field === 'website' && websiteConflictAllowed))) return '';
+  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9 && !(field === 'website' && websiteConflictAllowed) && !(field === 'phone' && score > 0))) return '';
   if (scores.website === 1 && address && scores.phone === 1) return 'exact-name-website-address-phone';
   if (scores.website === 1 && address && scores.ultimateParentAccount === 1) return 'exact-name-website-address-ultimate-parent-evidence';
   if (scores.website === 1 && address) return 'exact-name-website-address';
@@ -258,7 +301,7 @@ function exactRule(scores, relationship) {
 
 function intermediateRule(scores, relationship) {
   if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9)) return '';
-  const address = billingAddressScore(scores) >= 0.82;
+  const address = Boolean(scores.billingStreet != null && billingAddressScore(scores) >= 0.82);
   if (scores.name === 1) return 'exact-name-only';
   if (relationship.kind === 'same-level-equivalent' && scores.name >= 0.95 && scores.website === 1 && address) return 'near-name-website-address';
   if (relationship.kind === 'same-level-equivalent' && scores.name >= 0.95 && scores.website === 1 && scores.phone === 1) return 'near-name-website-phone';
@@ -273,12 +316,14 @@ function evidence(left, right, scores) {
     ['address', 'Billing address', normalizeAddress(left), normalizeAddress(right), billingAddressScore(scores)],
     ['ultimate_parent_account__c', 'Ultimate Parent Account', left.ultimate_parent_account__c, right.ultimate_parent_account__c, scores.ultimateParentAccount]
   ];
+  const addressHasAnchor = [left.billingStreet, left.billingCity, left.billingState, left.billingPostalCode, right.billingStreet, right.billingCity, right.billingState, right.billingPostalCode].some(meaningful);
   return values.map(([field, label, rawLeft, rawRight, score, leftEvidence, rightEvidence]) => ({
     field, label, left: normalizeText(rawLeft), right: normalizeText(rawRight),
-    status: leftEvidence || rightEvidence
-      ? (leftEvidence.status === 'invalid' || rightEvidence.status === 'invalid' ? 'invalid' : leftEvidence.status !== 'valid' || rightEvidence.status !== 'valid' ? 'blank' : score === 1 ? 'matched' : 'conflict')
+    status: field === 'address' && !addressHasAnchor ? 'blank' : leftEvidence || rightEvidence
+      ? (leftEvidence.status === 'invalid' || rightEvidence.status === 'invalid' ? 'invalid' : leftEvidence.status !== 'valid' || rightEvidence.status !== 'valid' ? 'blank' : score === 1 ? 'matched' : field === 'phone' && score > 0 ? 'partial' : 'conflict')
       : (!rawLeft || !rawRight ? 'blank' : score >= 0.9 ? 'matched' : 'conflict'),
     score, leftRaw: String(rawLeft ?? ''), rightRaw: String(rawRight ?? ''),
+    matchKind: field === 'phone' ? phoneMatchKind(left.phone, right.phone, score) : '',
     leftInvalidReason: leftEvidence?.reason || '', rightInvalidReason: rightEvidence?.reason || ''
   }));
 }
@@ -311,13 +356,14 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   const lane = exactConfidenceRule ? 'exact-confidence' : intermediateConfidenceRule ? 'intermediate-confidence' : 'weighted-review';
   const canonicalScore = weighted.value;
   const exactIdentity = Boolean(exactConfidenceRule);
-  const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9);
+  const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9 && !(field === 'phone' && score > 0));
   const contradictionCategory = hasConflict ? 'field-conflict' : '';
   const reasons = [];
   if (scores.name === 1) reasons.push('Exact account name');
   else if ((scores.name || 0) >= 0.88) reasons.push('Near-exact account name');
   if (scores.website === 1) reasons.push('Exact website');
   if (scores.phone === 1) reasons.push('Exact phone');
+  else if ((scores.phone || 0) > 0) reasons.push('Partial phone corroboration');
   if (billingAddressScore(scores) >= 0.9) reasons.push('Aligned billing address');
   if (scores.ultimateParentAccount === 1) reasons.push('Matching ultimate parent account');
   if (relationship.reason) reasons.push(relationship.reason);

@@ -83,6 +83,85 @@ test('named regression: placeholder account names cannot create high-confidence 
   assert.equal(pair.accountNameRelationship, 'missing-name');
 });
 
+test('named regression: sparse Science versus SCIENCE PO stays review-only below strong bands', () => {
+  const pair = scorePair(
+    { id: 'SCIENCE-USD', name: 'Science!', currencyisocode: 'USD', billingcountry: 'US' },
+    { id: 'SCIENCE-PO-EUR', name: 'SCIENCE PO', currencyisocode: 'EUR', billingcountry: 'US' }
+  );
+  assert.equal(pair.lane, 'weighted-review');
+  assert.equal(pair.accountNameRelationship, 'material-token-conflict');
+  assert.ok(pair.score < 90);
+  assert.ok(pair.reasons.some((reason) => reason.includes('Materially different name token')));
+});
+
+test('named regression: country-only address overlap is blank and cannot satisfy address corroboration', () => {
+  const pair = scorePair(
+    { id: 'COUNTRY-USD', name: 'Acme', currencyisocode: 'USD', billingcountry: 'US' },
+    { id: 'COUNTRY-EUR', name: 'Acme', currencyisocode: 'EUR', billingcountry: 'US' }
+  );
+  const address = pair.evidence.find((item) => item.field === 'address');
+  assert.equal(address.status, 'blank');
+  assert.equal(pair.exactConfidenceRule, '');
+  assert.equal(pair.lane, 'intermediate-confidence');
+});
+
+test('named regression: city-only or postal-only address evidence cannot promote sparse exact names', () => {
+  for (const field of ['billingcity', 'billingpostalcode']) {
+    const pair = scorePair(
+      { id: `SPARSE-${field}-USD`, name: 'Acme', currencyisocode: 'USD', [field]: field === 'billingcity' ? 'Boston' : '02108' },
+      { id: `SPARSE-${field}-EUR`, name: 'Acme', currencyisocode: 'EUR', [field]: field === 'billingcity' ? 'Boston' : '02108' }
+    );
+    assert.ok(pair.score < 90, `${field} must not create high-confidence sparse corroboration`);
+    assert.equal(pair.exactConfidenceRule, '');
+  }
+});
+
+test('named regression: conservative abbreviation and alias evidence is not unfairly suppressed', () => {
+  const pair = scorePair(
+    { id: 'ALIAS-USD', name: 'Acme Corp', currencyisocode: 'USD', website: 'acme.example' },
+    { id: 'ALIAS-EUR', name: 'Acme Corporation', currencyisocode: 'EUR', website: 'acme.example' }
+  );
+  assert.equal(pair.accountNameRelationship, 'same-level-exact');
+  assert.equal(pair.fieldScores.name, 1);
+  assert.ok(pair.score >= 90);
+});
+
+test('named regression: partial phone is corroboration while a genuine conflict remains conflict evidence', () => {
+  const partial = scorePair(
+    { id: 'PHONE-PARTIAL-USD', name: 'Acme', currencyisocode: 'USD', phone: '2125550100' },
+    { id: 'PHONE-PARTIAL-EUR', name: 'Acme', currencyisocode: 'EUR', phone: '2125550199' }
+  );
+  const partialEvidence = partial.evidence.find((item) => item.field === 'phone');
+  assert.equal(partialEvidence.status, 'partial');
+  assert.equal(partialEvidence.matchKind, 'partial-prefix');
+  assert.ok(partial.reasons.includes('Partial phone corroboration'));
+  assert.equal(partial.reasonCodes.includes('conflicting-evidence'), false);
+
+  const conflict = scorePair(
+    { id: 'PHONE-CONFLICT-USD', name: 'Acme', currencyisocode: 'USD', phone: '2125550100' },
+    { id: 'PHONE-CONFLICT-EUR', name: 'Acme', currencyisocode: 'EUR', phone: '6465550199' }
+  );
+  assert.equal(conflict.evidence.find((item) => item.field === 'phone').matchKind, 'conflict');
+  assert.equal(conflict.reasonCodes.includes('conflicting-evidence'), true);
+
+  const areaOnly = scorePair(
+    { id: 'PHONE-AREA-USD', name: 'Acme', currencyisocode: 'USD', phone: '2125550100' },
+    { id: 'PHONE-AREA-EUR', name: 'Acme', currencyisocode: 'EUR', phone: '2127770199' }
+  );
+  assert.equal(areaOnly.fieldScores.phone, 0);
+  assert.equal(areaOnly.reasonCodes.includes('conflicting-evidence'), true);
+});
+
+test('named regression: hierarchy expansion is demoted even with matching address', () => {
+  const pair = scorePair(
+    { id: 'HIERARCHY-USD', name: 'Acme', currencyisocode: 'USD', billingstreet: '1 Main', billingcity: 'Boston' },
+    { id: 'HIERARCHY-EUR', name: 'Acme Branch', currencyisocode: 'EUR', billingstreet: '1 Main', billingcity: 'Boston' }
+  );
+  assert.equal(pair.accountNameRelationship, 'hierarchy-expansion');
+  assert.equal(pair.lane, 'weighted-review');
+  assert.ok(pair.score <= 83);
+});
+
 test('CSV handles BOM, CRLF, and quoted commas', () => {
   const parsed = parseCsv('\uFEFFId,Name,CurrencyIsoCode,BillingStreet\r\nA,"Acme, Inc.",USD,"1 Main, Suite 2"\r\n');
   assert.equal(parsed.errors.length, 0); assert.equal(parsed.rows[0].name, 'Acme, Inc.'); assert.equal(parsed.rows[0].billingstreet, '1 Main, Suite 2'); assert.equal(normalizeWebsite('https://www.Example.com/path'), 'example com');
