@@ -1,4 +1,5 @@
 const REQUIRED_HEADERS = ['id', 'name', 'currencyisocode'];
+const ACCOUNT_SENTINEL_PATTERN = /^(?:0|n\/a|na|none|null|unknown|not available|not provided|unavailable|missing)$/i;
 const HEADER_ALIASES = new Map([
   ['accountid', 'id'], ['salesforceid', 'id'], ['currency', 'currencyisocode'],
   ['currencyiso', 'currencyisocode'], ['accountcurrency', 'currencyisocode'],
@@ -67,14 +68,19 @@ export function parseCsv(text) {
     if (!record.id) errors.push(`Row ${record.__row}: Id is blank.`);
     else if (ids.has(record.id)) errors.push(`Row ${record.__row}: duplicate Id ${record.id}.`);
     else ids.add(record.id);
-    if (!record.name) errors.push(`Row ${record.__row}: Name is blank.`);
-    if (!record.currencyisocode) errors.push(`Row ${record.__row}: CurrencyIsoCode is blank.`);
+    if (!normalizeComparableInput(record.name)) errors.push(`Row ${record.__row}: Name is blank.`);
+    if (!normalizeComparableInput(record.currencyisocode)) errors.push(`Row ${record.__row}: CurrencyIsoCode is blank.`);
   });
   return { headers, rows: records, errors };
 }
 
 export function normalizeText(value) {
   return String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+}
+
+export function normalizeComparableInput(value) {
+  const raw = String(value ?? '').trim();
+  return !raw || ACCOUNT_SENTINEL_PATTERN.test(raw) ? '' : raw;
 }
 
 export function normalizeWebsite(value) {
@@ -84,5 +90,5 @@ export function normalizeWebsite(value) {
 export function normalizePhone(value) { return String(value ?? '').replace(/\D/g, ''); }
 
 export function normalizeAddress(record) {
-  return normalizeText(['billingstreet', 'billingcity', 'billingstate', 'billingpostalcode', 'billingcountry'].map((field) => record[field]).filter(Boolean).join(' '));
+  return normalizeText(['billingstreet', 'billingcity', 'billingstate', 'billingpostalcode', 'billingcountry'].map((field) => normalizeComparableInput(record[field])).filter(Boolean).join(' '));
 }

@@ -5,3 +5,4 @@
 - Phone validation accepts phone-like digit structure with at least seven digits and rejects too-short, email-like, URL-like, or malformed values.
 - Invalid typed values are metadata-only evidence. They are not treated as blanks in audit output, but they behave as unavailable to the identity model.
 - The Renaissance exception is limited to a valid unequal Website conflict with exact name, aligned address, and exact valid Phone; it does not make valid unequal Website conflicts generally harmless.
+- Comparable Account sentinels (`0`, `N/A`, `none`, `null`, `unknown`, `not available`, `not provided`, `unavailable`, and `missing`) normalize to unavailable before candidate eligibility, scoring, contradiction, evidence, or blocking. Website and Phone still retain typed invalid status and raw values.

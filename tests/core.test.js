@@ -232,3 +232,13 @@ test('named regression: Account website sentinels are invalid and unavailable', 
   assert.match(website.leftInvalidReason, /sentinel/);
   assert.ok(pair.reasons.includes('Website ignored as invalid'));
 });
+
+test('named regression: Account comparable-field sentinels are unavailable and cannot create cross-currency evidence', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,BillingStreet,BillingCity,BillingCountry,Ultimate_Parent_Account__c\nA,0,0,0,0,N/A,unknown,none\nB,Acme Media,EUR,acme.example.com,1 Main,New York,US,Acme Media');
+  assert.ok(parsed.errors.some((error) => error.includes('Name is blank')));
+  assert.ok(parsed.errors.some((error) => error.includes('CurrencyIsoCode is blank')));
+  const pair = scorePair(parsed.rows[0], parsed.rows[1]);
+  assert.equal(pair.currenciesDiffer, false);
+  assert.equal(pair.score, 0);
+  assert.equal(pair.reasonCodes[0], 'currency-not-cross-currency');
+});

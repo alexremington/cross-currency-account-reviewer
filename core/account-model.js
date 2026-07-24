@@ -1,4 +1,4 @@
-import { normalizeAddress, normalizePhone, normalizeText, normalizeWebsite } from './csv.js';
+import { normalizeAddress, normalizeComparableInput, normalizePhone, normalizeText, normalizeWebsite } from './csv.js';
 
 // Pinned from Duplicate Reviewer Account model: recalibrate-account-scoring-model
 // plus account-three-lane-score-distribution and account-hierarchy-aware-top-lane.
@@ -54,7 +54,7 @@ const NAME_TOKEN_ALIASES = new Map([
   ['assoc', 'association'], ['co', 'company'], ['corp', 'corporation'], ['dept', 'department'],
   ['intl', 'international'], ['org', 'organization'], ['sch', 'school'], ['univ', 'university']
 ]);
-const PLACEHOLDER_VALUES = new Set(['-', '--', '---', 'n a', 'na', 'none', 'null', 'unknown', 'not available']);
+const PLACEHOLDER_VALUES = new Set(['-', '--', '---', 'n a', 'na', 'none', 'null', 'unknown', 'not available', 'not provided', 'unavailable', 'missing', '0']);
 
 const EXACT_RULE_SCORES = {
   'exact-name-website-address-phone': 100,
@@ -81,7 +81,7 @@ function tokenSet(value) { return new Set(tokens(value)); }
 function canonicalNameTokens(value) { return tokens(value).map((token) => NAME_TOKEN_ALIASES.get(token) || token); }
 function canonicalName(value) { return canonicalNameTokens(value).join(' '); }
 function meaningful(value) {
-  const normalized = normalizeText(value);
+  const normalized = normalizeText(normalizeComparableInput(value));
   return Boolean(normalized && !PLACEHOLDER_VALUES.has(normalized));
 }
 function overlap(left, right) {
@@ -212,20 +212,20 @@ function adapt(record) {
   const phoneEvidence = validatePhone(record.phone);
   return {
     ...record,
-    name: record.name || '',
+    name: normalizeComparableInput(record.name),
     rawWebsite: String(record.website ?? ''),
     rawPhone: String(record.phone ?? ''),
     website: websiteEvidence.status === 'valid' ? websiteEvidence.value : '',
     phone: phoneEvidence.status === 'valid' ? phoneEvidence.value : '',
     websiteEvidence,
     phoneEvidence,
-    billingStreet: record.billingstreet || '',
-    billingCity: record.billingcity || '',
-    billingState: record.billingstate || '',
-    billingPostalCode: record.billingpostalcode || '',
-    billingCountry: record.billingcountry || '',
-    accountCurrency: record.currencyisocode || '',
-    ultimateParentAccount: record.ultimate_parent_account__c || ''
+    billingStreet: normalizeComparableInput(record.billingstreet),
+    billingCity: normalizeComparableInput(record.billingcity),
+    billingState: normalizeComparableInput(record.billingstate),
+    billingPostalCode: normalizeComparableInput(record.billingpostalcode),
+    billingCountry: normalizeComparableInput(record.billingcountry),
+    accountCurrency: normalizeComparableInput(record.currencyisocode),
+    ultimateParentAccount: normalizeComparableInput(record.ultimate_parent_account__c)
   };
 }
 
@@ -419,7 +419,7 @@ export function generateCrossCurrencyPairs(records) {
     const values = [...indexes];
     for (let i = 0; i < values.length; i += 1) for (let j = i + 1; j < values.length; j += 1) {
       const left = records[values[i]]; const right = records[values[j]];
-      const currenciesDiffer = left.currencyisocode && right.currencyisocode && String(left.currencyisocode).toUpperCase() !== String(right.currencyisocode).toUpperCase();
+      const currenciesDiffer = meaningful(left.currencyisocode) && meaningful(right.currencyisocode) && String(left.currencyisocode).toUpperCase() !== String(right.currencyisocode).toUpperCase();
       if (currenciesDiffer) {
         if (keys.size >= MAX_CROSS_CURRENCY_CANDIDATE_PAIRS) {
           candidateCapHit = true;
