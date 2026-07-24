@@ -5,3 +5,4 @@ Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet,BillingCity,BillingCountry,L
 002EUR,Other Company,EUR,https://different.example.com,2125550102,2 High Street,London,United Kingdom,2026-07-01
 003USD,Same Currency,USD,https://same.example.com,2125550103,3 High Street,London,United Kingdom,2026-07-01
 003USD2,Same Currency,USD,https://same.example.com,2125550103,3 High Street,London,United Kingdom,2026-07-01
+004SKIP,unknown,USD,https://ignored.example.com,2125550104,4 Skip Street,London,United Kingdom,2026-07-01

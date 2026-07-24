@@ -167,6 +167,20 @@ test('CSV handles BOM, CRLF, and quoted commas', () => {
   assert.equal(parsed.errors.length, 0); assert.equal(parsed.rows[0].name, 'Acme, Inc.'); assert.equal(parsed.rows[0].billingstreet, '1 Main, Suite 2'); assert.equal(normalizeWebsite('https://www.Example.com/path'), 'example com');
 });
 
+test('named regression: unavailable Account Name rows are skipped without blocking valid rows', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode\nSKIP,UNKNOWN,USD\nA,Acme Media,USD\nB,Acme Media,EUR');
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.rows.length, 2);
+  assert.deepEqual(parsed.skippedRows, [{ row: 2, id: 'SKIP', name: 'UNKNOWN', reason: 'Account Name is unavailable.' }]);
+  assert.equal(generatePairs(parsed.rows).length, 1);
+});
+
+test('named regression: skipped unavailable-name rows do not hide errors on retained rows', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode\nSKIP,N/A,USD\nA,Acme Media,');
+  assert.equal(parsed.skippedRows.length, 1);
+  assert.ok(parsed.errors.some((error) => error.includes('CurrencyIsoCode is blank')));
+});
+
 test('named regression: Unicode identity is retained for matching', () => {
   const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website\nA,株式会社サンプル,USD,https://sample.example\nB,株式会社サンプル,EUR,https://sample.example');
   assert.equal(generatePairs(parsed.rows)[0].score, 100);
@@ -235,10 +249,17 @@ test('named regression: Account website sentinels are invalid and unavailable', 
 
 test('named regression: Account comparable-field sentinels are unavailable and cannot create cross-currency evidence', () => {
   const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,BillingStreet,BillingCity,BillingCountry,Ultimate_Parent_Account__c\nA,0,0,0,0,N/A,unknown,none\nB,Acme Media,EUR,acme.example.com,1 Main,New York,US,Acme Media');
-  assert.ok(parsed.errors.some((error) => error.includes('Name is blank')));
-  assert.ok(parsed.errors.some((error) => error.includes('CurrencyIsoCode is blank')));
-  const pair = scorePair(parsed.rows[0], parsed.rows[1]);
-  assert.equal(pair.currenciesDiffer, false);
-  assert.equal(pair.score, 0);
-  assert.equal(pair.reasonCodes[0], 'currency-not-cross-currency');
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.rows.length, 1);
+  assert.equal(parsed.skippedRows[0].id, 'A');
+});
+
+test('named regression: score ledger includes deterministic recommended master source columns', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,Phone\nMASTER-EUR,Acme Media,EUR,https://acme.example.com,2125550100\nCHILD-USD,Acme Media,USD,,');
+  const ledger = buildScoreLedger(generatePairs(parsed.rows), parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
+  assert.equal(ledger.records[0].recommendedMaster.id, 'MASTER-EUR');
+  assert.match(ledger.csv, /recommendedMasterId/);
+  assert.match(ledger.csv, /recommendedMasterCurrencyIsoCode/);
+  assert.match(ledger.csv, /MASTER-EUR/);
+  assert.match(ledger.summaryJson, /recommendedMasterUltimateParentAccount/);
 });

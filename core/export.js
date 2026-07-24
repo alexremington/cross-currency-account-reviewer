@@ -1,10 +1,19 @@
+import { buildProposal } from './proposals.js';
+
 function csvCell(value) { const text = String(value ?? ''); return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 export function toCsv(rows, columns) { return [columns.join(','), ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(','))].join('\n') + '\n'; }
 
 const LEDGER_VERSION = 'cross-currency-score-ledger/v1';
+const RECOMMENDED_MASTER_FIELDS = [
+  ['id', 'recommendedMasterId'], ['name', 'recommendedMasterName'], ['currencyisocode', 'recommendedMasterCurrencyIsoCode'],
+  ['website', 'recommendedMasterWebsite'], ['phone', 'recommendedMasterPhone'], ['billingstreet', 'recommendedMasterBillingStreet'],
+  ['billingcity', 'recommendedMasterBillingCity'], ['billingstate', 'recommendedMasterBillingState'], ['billingpostalcode', 'recommendedMasterBillingPostalCode'],
+  ['billingcountry', 'recommendedMasterBillingCountry'], ['ultimate_parent_account__c', 'recommendedMasterUltimateParentAccount']
+];
 const LEDGER_COLUMNS = [
   'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'operationalScore', 'band', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
+  ...RECOMMENDED_MASTER_FIELDS.map(([, column]) => column),
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
   'websiteStatus', 'websiteLeftRaw', 'websiteLeftNormalized', 'websiteRightRaw', 'websiteRightNormalized',
   'phoneStatus', 'phoneLeftRaw', 'phoneLeftNormalized', 'phoneRightRaw', 'phoneRightNormalized',
@@ -24,6 +33,8 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const ledgerRecords = pairs.map((pair) => {
     const left = byId.get(pair.leftId) || {};
     const right = byId.get(pair.rightId) || {};
+    const proposal = buildProposal(left, right, pair);
+    const recommendedMaster = byId.get(proposal.recommendedMasterId) || {};
     const evidence = pair.evidence.map((item) => ({
       field: item.field,
       label: item.label,
@@ -47,6 +58,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       intermediateConfidenceRule: pair.intermediateConfidenceRule || '',
       exactConfidenceEligible: Boolean(pair.exactConfidenceEligible),
       intermediateConfidenceEligible: Boolean(pair.intermediateConfidenceEligible),
+      recommendedMaster: Object.fromEntries(RECOMMENDED_MASTER_FIELDS.map(([field]) => [field, rawField(recommendedMaster, field)])),
       fieldScores: pair.fieldScores || {},
       exactIdentity: pair.exactIdentity,
       reasonCodes: pair.reasonCodes,
@@ -60,7 +72,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const document = {
     ledgerVersion: LEDGER_VERSION,
     generatedAt: metadata.generatedAt || new Date().toISOString(),
-    source: { fileName: metadata.fileName || '', recordCount: records.length, headers: metadata.headers || [] },
+    source: { fileName: metadata.fileName || '', recordCount: records.length, skippedRecordCount: metadata.skippedRows?.length || 0, skippedRows: metadata.skippedRows || [], headers: metadata.headers || [] },
     modelVersion: ledgerRecords.find((record) => record.modelVersion)?.modelVersion || '',
     candidatePairCount: ledgerRecords.length,
     records: ledgerRecords
@@ -87,6 +99,9 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       reasonCodes: item.reasonCodes.join(' | '), reasons: item.reasons.join(' | '), matchedEvidenceFields: item.matchedEvidenceFields.join(' | '),
       conflictingEvidenceFields: item.conflictingEvidenceFields.join(' | '), blankEvidenceFields: item.blankEvidenceFields.join(' | ')
     };
+    RECOMMENDED_MASTER_FIELDS.forEach(([field, column]) => {
+      row[column] = item.recommendedMaster?.[field] || '';
+    });
     item.evidence.forEach((evidence) => {
       const prefix = evidenceColumns.find(([field]) => field === evidence.field)?.[1] || evidence.field;
       row[`${prefix}Status`] = evidence.status;

@@ -1,0 +1,4 @@
+- [x] Implement non-blocking unavailable-name row skipping and metadata.
+- [x] Add deterministic recommended-master selection and score-ledger columns.
+- [x] Add parser, export, and UI named regressions.
+- [x] Update README/import guidance and run the Cross Currency validation ladder.

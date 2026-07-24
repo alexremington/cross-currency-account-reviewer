@@ -63,15 +63,21 @@ export function parseCsv(text) {
     headers.forEach((header, index) => { record[header] = String(values[index] ?? '').trim(); record.__raw[header] = values[index] ?? ''; });
     return record;
   });
+  const skippedRows = records.filter((record) => !normalizeComparableInput(record.name)).map((record) => ({
+    row: record.__row,
+    id: record.id,
+    name: record.__raw.name ?? record.name ?? '',
+    reason: 'Account Name is unavailable.'
+  }));
+  const usableRecords = records.filter((record) => normalizeComparableInput(record.name));
   const ids = new Set();
-  records.forEach((record) => {
+  usableRecords.forEach((record) => {
     if (!record.id) errors.push(`Row ${record.__row}: Id is blank.`);
     else if (ids.has(record.id)) errors.push(`Row ${record.__row}: duplicate Id ${record.id}.`);
     else ids.add(record.id);
-    if (!normalizeComparableInput(record.name)) errors.push(`Row ${record.__row}: Name is blank.`);
     if (!normalizeComparableInput(record.currencyisocode)) errors.push(`Row ${record.__row}: CurrencyIsoCode is blank.`);
   });
-  return { headers, rows: records, errors };
+  return { headers, rows: usableRecords, skippedRows, errors };
 }
 
 export function normalizeText(value) {

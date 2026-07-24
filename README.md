@@ -65,7 +65,9 @@ macOS service state and logs are stored outside the repository under `~/Library/
 
 ## CSV contract
 
-Required headers are `Id`, `Name`, and `CurrencyIsoCode`. The scorer reviews `Name`, `CurrencyIsoCode`, `Website`, `Phone`, the composite billing address (`BillingStreet`, `BillingCity`, `BillingState`, `BillingPostalCode`, `BillingCountry`), and `Ultimate_Parent_Account__c`. `LastModifiedDate` is accepted and preserved as source data, but does not affect scoring. Only records with two nonblank, different currencies become candidates. Salesforce export headers are accepted case-insensitively.
+Required headers are `Id`, `Name`, and `CurrencyIsoCode`. Rows with an empty or unavailable Account Name (`none`, `N/A`, `null`, `unknown`, and the other supported sentinels) are skipped with a non-blocking import notice. Other validation errors remain blocking. The scorer reviews `Name`, `CurrencyIsoCode`, `Website`, `Phone`, the composite billing address (`BillingStreet`, `BillingCity`, `BillingState`, `BillingPostalCode`, `BillingCountry`), and `Ultimate_Parent_Account__c`. `LastModifiedDate` is accepted and preserved as source data, but does not affect scoring. Only records with two nonblank, different currencies become candidates. Salesforce export headers are accepted case-insensitively.
+
+The score ledger includes deterministic `recommendedMaster*` columns for the source Account selected as the best master record for each pair. The selection prefers the record supplying the most proposed field values, then the most populated display fields, then stable ID order. Skipped rows remain listed in ledger metadata but are excluded from matching.
 
 ## Workflow
 
