@@ -90,7 +90,7 @@ export function normalizeComparableInput(value) {
 }
 
 export function normalizeWebsite(value) {
-  return normalizeText(String(value ?? '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0]);
+  return normalizeText(String(value ?? '').replace(/^https?:\/\//i, '').replace(/^(?:www\.|m\.)/i, '').split('/')[0]);
 }
 
 export function normalizePhone(value) { return String(value ?? '').replace(/\D/g, ''); }

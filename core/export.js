@@ -11,7 +11,7 @@ const RECOMMENDED_MASTER_FIELDS = [
   ['billingcountry', 'recommendedMasterBillingCountry'], ['ultimate_parent_account__c', 'recommendedMasterUltimateParentAccount']
 ];
 const LEDGER_COLUMNS = [
-  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'operationalScore', 'band', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
+  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'operationalScore', 'rawWeightedScore', 'effectiveWeightedScore', 'fieldTreatments', 'band', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   ...RECOMMENDED_MASTER_FIELDS.map(([, column]) => column),
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
@@ -48,6 +48,9 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       right: { id: pair.rightId, currency: rawField(right, 'currencyisocode') },
       score: pair.score,
       operationalScore: pair.operationalScore,
+      rawWeightedScore: pair.rawWeightedScore ?? pair.score,
+      effectiveWeightedScore: pair.effectiveWeightedScore ?? pair.score,
+      fieldTreatments: pair.fieldTreatments || [],
       band: pair.band,
       modelVersion: pair.modelVersion || '',
       accountNameRelationship: pair.accountNameRelationship || '',
@@ -90,7 +93,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const rows = ledgerRecords.map((item) => {
     const row = {
       pairKey: item.pairKey, leftId: item.left.id, leftCurrency: item.left.currency, rightId: item.right.id, rightCurrency: item.right.currency,
-      score: item.score, operationalScore: item.operationalScore, band: item.band, modelVersion: item.modelVersion,
+      score: item.score, operationalScore: item.operationalScore, rawWeightedScore: item.rawWeightedScore, effectiveWeightedScore: item.effectiveWeightedScore, fieldTreatments: JSON.stringify(item.fieldTreatments), band: item.band, modelVersion: item.modelVersion,
       accountNameRelationship: item.accountNameRelationship, accountNameRelationshipReason: item.accountNameRelationshipReason,
       contradictionCategory: item.contradictionCategory, contradictionReason: item.contradictionReason,
       exactConfidenceRule: item.exactConfidenceRule, intermediateConfidenceRule: item.intermediateConfidenceRule,

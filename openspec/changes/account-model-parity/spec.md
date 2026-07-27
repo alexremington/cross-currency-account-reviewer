@@ -14,7 +14,9 @@ The scorer MUST treat Account typed sentinels and malformed Website/Phone values
 
 The public port MUST record the Duplicate Reviewer Account-model source version. A parity fixture suite MUST compare non-currency field scores, name relationships, contradiction categories, caps, reason taxonomy, and confidence semantics against the pinned source behavior.
 
-Future Account-model updates MUST be applied through an explicit Cross-Currency sync release with updated parity fixtures and model-version metadata.
+Future Account-model updates MUST be applied through an explicit Cross-Currency sync release with updated parity fixtures and model-version metadata. The current pinned version is `duplicate-reviewer-account-model/2026-07-26-evidence-aware`.
+
+The evidence-aware release adds raw/effective weighted scores, field treatments, contextual invalid Website reasons, parent-neutralization metadata, and decisive-address-conflict classification. Cross Currency continues to require unequal populated currencies while excluding currency from identity scoring and contradiction semantics.
 
 ## Existing contracts
 

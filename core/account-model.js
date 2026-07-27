@@ -2,7 +2,7 @@ import { normalizeAddress, normalizeComparableInput, normalizePhone, normalizeTe
 
 // Pinned from Duplicate Reviewer Account model: recalibrate-account-scoring-model
 // plus account-three-lane-score-distribution and account-hierarchy-aware-top-lane.
-export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-22-continuous-score';
+export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-26-evidence-aware';
 export const MAX_CROSS_CURRENCY_CANDIDATE_PAIRS = 250000;
 
 const FIELD_WEIGHTS = {
@@ -158,7 +158,19 @@ function phoneMatchKind(left, right, score) {
   return 'blank';
 }
 
-function validateWebsite(raw) {
+function normalizedAccountExceptionName(value) {
+  return normalizeText(value).replace(/\b(?:inc|llc|ltd|corp|corporation|company)\b/g, '').trim();
+}
+
+// Explicit hook: add narrowly reviewed aliases here without changing scorer logic.
+function isContextuallyAllowedWebsite(hostname, accountName) {
+  const name = normalizedAccountExceptionName(accountName);
+  if (['politico.com', 'politicopro.com', 'politico.eu'].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) return /\bpolitico\b/.test(name);
+  if (hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com')) return /\blinkedin\b/.test(name);
+  return true;
+}
+
+function validateWebsite(raw, accountName = '') {
   const value = String(raw ?? '').trim();
   if (!value) return { status: 'blank', value: '', raw: '', reason: '' };
   if (/^(?:0|n\/a|na|none|null|unknown|no website found|not available)$/i.test(value)) return { status: 'invalid', value: '', raw: value, reason: 'website is a sentinel or unavailable value' };
@@ -167,6 +179,7 @@ function validateWebsite(raw) {
     const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
     const hostname = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
     if (hostname === '0.0.0.0' || !hostname.includes('.') || !/^[a-z0-9.-]+$/i.test(hostname) || hostname.startsWith('.') || hostname.endsWith('.')) return { status: 'invalid', value: '', raw: value, reason: 'website has no valid hostname' };
+    if (!isContextuallyAllowedWebsite(hostname, accountName)) return { status: 'invalid', value: '', raw: value, reason: 'website domain is reserved for a different Account context' };
     return { status: 'valid', value: hostname, raw: value, reason: '' };
   } catch {
     return { status: 'invalid', value: '', raw: value, reason: 'website is not a valid URL or hostname' };
@@ -208,7 +221,7 @@ function accountNameRelationship(nameScore, left, right) {
 }
 
 function adapt(record) {
-  const websiteEvidence = validateWebsite(record.website);
+  const websiteEvidence = validateWebsite(record.website, record.name);
   const phoneEvidence = validatePhone(record.phone);
   return {
     ...record,
@@ -258,34 +271,50 @@ function strongBillingAddressScore(scores) {
   return street != null && street >= 0.82 && (locality || street === 1);
 }
 
-function weightedScore(scores, left, right) {
-  if (scores.name == null) return { value: 0, discounted: false, nameRelationship: accountNameRelationship(scores.name, left, right) };
-  const entries = Object.entries(FIELD_WEIGHTS).filter(([field]) => scores[field] != null);
-  if (!entries.length) return { value: 0, discounted: false };
-  let numerator = 0; let denominator = 0; let discounted = false;
-  for (const [field, weight] of entries) {
-    const factor = field === 'name' ? 1 : (scores[field] >= 1 ? 1 : POSITIVE_FACTORS[field] || 1);
-    if (factor < 1) discounted = true;
-    numerator += scores[field] * weight * factor;
-    denominator += weight * factor;
-  }
-  let value = denominator ? (numerator / denominator) * 100 : 0;
-  const conflicts = Object.entries(scores).filter(([field, score]) => score != null && score < 0.9 && field !== 'accountCurrency' && !(field === 'phone' && score > 0));
-  for (const [field] of conflicts) value -= 12 * (CONTRADICTION_SEVERITY[field] || 0.15);
-  const nameRelationship = accountNameRelationship(scores.name || 0, left, right);
-  if (nameRelationship.kind === 'hierarchy-expansion') value = Math.min(value, 83);
-  if (nameRelationship.kind === 'scope-divergence') value = Math.min(value, 78);
-  if (nameRelationship.kind === 'material-token-conflict') value = Math.min(value, 79);
-  const hasCorroboration = [scores.website, scores.phone, scores.ultimateParentAccount].some((score) => score != null && score >= 0.9) || strongBillingAddressScore(scores);
-  if ((scores.name || 0) >= 0.95 && !hasCorroboration) value = Math.min(value, 89);
-  return { value: clamp(value), discounted, nameRelationship };
+function decisiveAddressConflict(scores, left, right) {
+  const comparable = ['billingCity', 'billingState', 'billingPostalCode', 'billingCountry'].filter((field) => meaningful(left[field]) && meaningful(right[field]));
+  return comparable.length > 0 && comparable.some((field) => scores[field] === 0) && (scores.billingCity === 0 || scores.billingState === 0 || scores.billingPostalCode === 0 || scores.billingCountry === 0);
 }
 
-function exactRule(scores, relationship) {
+function sameLevelIdentityBundle(scores, left, right) {
+  if (scores.name !== 1 || decisiveAddressConflict(scores, left, right)) return false;
+  return [scores.website === 1, scores.phone === 1, strongBillingAddressScore(scores)].filter(Boolean).length >= 2;
+}
+
+function weightedScore(scores, left, right) {
+  if (scores.name == null) return { value: 0, rawWeightedScore: 0, effectiveWeightedScore: 0, discounted: false, nameRelationship: accountNameRelationship(scores.name, left, right), fieldTreatments: [], parentNeutralized: false };
+  const calculate = (fields) => {
+    const entries = Object.entries(FIELD_WEIGHTS).filter(([field]) => fields[field] != null);
+    if (!entries.length) return { value: 0, discounted: false };
+    let numerator = 0; let denominator = 0; let discounted = false;
+    for (const [field, weight] of entries) {
+      const factor = field === 'name' ? 1 : (fields[field] >= 1 ? 1 : POSITIVE_FACTORS[field] || 1);
+      if (factor < 1) discounted = true;
+      numerator += fields[field] * weight * factor; denominator += weight * factor;
+    }
+    let value = denominator ? (numerator / denominator) * 100 : 0;
+    for (const [field, score] of Object.entries(fields).filter(([field, score]) => score != null && score < 0.9 && field !== 'accountCurrency' && !(field === 'phone' && score > 0))) value -= 12 * (CONTRADICTION_SEVERITY[field] || 0.15);
+    return { value: clamp(value), discounted };
+  };
+  const raw = calculate(scores);
+  const relationship = accountNameRelationship(scores.name || 0, left, right);
+  const parentNeutralized = sameLevelIdentityBundle(scores, left, right) && scores.ultimateParentAccount != null && scores.ultimateParentAccount < 0.9;
+  const effectiveScores = parentNeutralized ? { ...scores, ultimateParentAccount: null } : scores;
+  const effective = calculate(effectiveScores);
+  let value = effective.value;
+  if (relationship.kind === 'hierarchy-expansion') value = Math.min(value, 83);
+  if (relationship.kind === 'scope-divergence') value = Math.min(value, 78);
+  if (relationship.kind === 'material-token-conflict') value = Math.min(value, 79);
+  const hasCorroboration = [scores.website, scores.phone, scores.ultimateParentAccount].some((score) => score != null && score >= 0.9) || strongBillingAddressScore(scores);
+  if ((scores.name || 0) >= 0.95 && !hasCorroboration) value = Math.min(value, 89);
+  return { value: clamp(value), rawWeightedScore: raw.value, effectiveWeightedScore: clamp(value), discounted: raw.discounted || effective.discounted, nameRelationship: relationship, fieldTreatments: parentNeutralized ? [{ field: 'ultimateParentAccount', treatment: 'neutralized', reason: 'parent-conflict-neutralized-by-same-level-identity' }] : [], parentNeutralized };
+}
+
+function exactRule(scores, relationship, left, right) {
   if (!['same-level-exact', 'same-level-equivalent'].includes(relationship.kind) || scores.name !== 1) return '';
   const address = strongBillingAddressScore(scores);
   const websiteConflictAllowed = scores.website != null && scores.website < 0.9 && address && scores.phone === 1;
-  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9 && !(field === 'website' && websiteConflictAllowed) && !(field === 'phone' && score > 0))) return '';
+  if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9 && !(field === 'ultimateParentAccount' && sameLevelIdentityBundle(scores, left, right)) && !(field === 'website' && websiteConflictAllowed) && !(field === 'phone' && score > 0))) return '';
   if (scores.website === 1 && address && scores.phone === 1) return 'exact-name-website-address-phone';
   if (scores.website === 1 && address && scores.ultimateParentAccount === 1) return 'exact-name-website-address-ultimate-parent-evidence';
   if (scores.website === 1 && address) return 'exact-name-website-address';
@@ -296,7 +325,7 @@ function exactRule(scores, relationship) {
   if (scores.website === 1) return 'exact-name-website';
   if (address) return 'exact-name-address';
   if (scores.phone === 1) return 'exact-name-phone';
-  return '';
+  return sameLevelIdentityBundle(scores, left, right) ? 'exact-name-only' : '';
 }
 
 function intermediateRule(scores, relationship) {
@@ -351,13 +380,15 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   scores.accountCurrency = null;
   const weighted = weightedScore(scores, left, right);
   const relationship = weighted.nameRelationship || accountNameRelationship(scores.name || 0, left, right);
-  const exactConfidenceRule = exactRule(scores, relationship);
+  const exactConfidenceRule = exactRule(scores, relationship, left, right);
   const intermediateConfidenceRule = exactConfidenceRule ? '' : intermediateRule(scores, relationship);
   const lane = exactConfidenceRule ? 'exact-confidence' : intermediateConfidenceRule ? 'intermediate-confidence' : 'weighted-review';
-  const canonicalScore = weighted.value;
+  const canonicalScore = exactConfidenceRule ? (EXACT_RULE_SCORES[exactConfidenceRule] || weighted.effectiveWeightedScore) : weighted.effectiveWeightedScore;
   const exactIdentity = Boolean(exactConfidenceRule);
-  const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9 && !(field === 'phone' && score > 0));
-  const contradictionCategory = hasConflict ? 'field-conflict' : '';
+  const addressConflict = decisiveAddressConflict(scores, left, right);
+  const parentNeutralized = weighted.parentNeutralized;
+  const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9 && !(field === 'phone' && score > 0) && !(field === 'ultimateParentAccount' && parentNeutralized));
+  const contradictionCategory = addressConflict ? 'decisive-address-conflict' : hasConflict ? 'field-conflict' : parentNeutralized ? 'parent-conflict-neutralized' : '';
   const reasons = [];
   if (scores.name === 1) reasons.push('Exact account name');
   else if ((scores.name || 0) >= 0.88) reasons.push('Near-exact account name');
@@ -373,24 +404,27 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   if (lane === 'weighted-review') reasons.push('Missing exact-confidence corroboration bundle');
   if (left.websiteEvidence.status === 'invalid' || right.websiteEvidence.status === 'invalid') reasons.push('Website ignored as invalid');
   if (left.phoneEvidence.status === 'invalid' || right.phoneEvidence.status === 'invalid') reasons.push('Phone ignored as invalid');
+  if (parentNeutralized) reasons.push('Ultimate parent conflict retained but neutralized by same-level identity');
+  if (addressConflict) reasons.push('Decisive billing geography conflict');
   reasons.push(`Cross-currency eligibility: ${currencyLeft} vs ${currencyRight}`);
   return {
     leftId: left.id, rightId: right.id, score: canonicalScore, value: canonicalScore, operationalScore: canonicalScore,
     band: lane, lane, exactIdentity, currenciesDiffer, currencyLeft, currencyRight,
-    modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, accountNameRelationship: relationship.kind,
-    accountNameRelationshipReason: relationship.reason, contradictionCategory, contradictionReason: hasConflict ? 'One or more comparable identity fields conflict.' : '', exactConfidenceRule, intermediateConfidenceRule,
+    modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, rawWeightedScore: weighted.rawWeightedScore, effectiveWeightedScore: weighted.effectiveWeightedScore, fieldTreatments: weighted.fieldTreatments,
+    accountNameRelationship: relationship.kind,
+    accountNameRelationshipReason: relationship.reason, contradictionCategory, contradictionReason: addressConflict ? 'Conflicting city, state, or postal geography.' : parentNeutralized ? 'parent-conflict-neutralized-by-same-level-identity' : hasConflict ? 'One or more comparable identity fields conflict.' : '', addressCategory: addressConflict ? 'decisive-address-conflict' : strongBillingAddressScore(scores) ? 'aligned' : 'minor-variation', exactConfidenceRule, intermediateConfidenceRule,
     exactConfidenceEligible: Boolean(exactConfidenceRule), intermediateConfidenceEligible: Boolean(intermediateConfidenceRule),
     sharedTaxonomy: { relationship: relationship.kind, promoted: lane !== 'weighted-review' },
     evidence: evidence(left, right, scores), reasonCodes: [
       exactIdentity ? 'exact-cross-currency-identity' : lane === 'intermediate-confidence' ? 'intermediate-cross-currency-match' : 'weighted-cross-currency-review',
-      relationship.kind, 'currency-differs', ...(hasConflict ? ['conflicting-evidence'] : [])
+      relationship.kind, 'currency-differs', ...(hasConflict || addressConflict ? ['conflicting-evidence'] : []), ...(parentNeutralized ? ['parent-conflict-neutralized-by-same-level-identity'] : [])
     ], reasons
   };
 }
 
 function blockingKeys(record) {
   const name = normalizeText(record.name);
-  const websiteEvidence = validateWebsite(record.website);
+  const websiteEvidence = validateWebsite(record.website, record.name);
   const phoneEvidence = validatePhone(record.phone);
   const website = websiteEvidence.status === 'valid' ? websiteEvidence.value : '';
   const phone = phoneEvidence.status === 'valid' ? phoneEvidence.value : '';
