@@ -4,7 +4,10 @@ export const CALIBRATED_MATCH_PROBABILITY_SEMANTICS = 'calibrated-match-probabil
 export const CALIBRATED_ARTIFACT_VERSION = 'cross-currency-score-ledger/v6';
 
 export function legacyScoreSemantics({ objectType, surface, modelVersion, populationDefinition }) {
-  return { scoreContractVersion: SCORE_CONTRACT_VERSION, scoreSemantics: LEGACY_HEURISTIC_SCORE_SEMANTICS, objectType, surface, populationDefinition, modelVersion };
+  return { scoreContractVersion: SCORE_CONTRACT_VERSION, scoreSemantics: LEGACY_HEURISTIC_SCORE_SEMANTICS, objectType, surface, populationDefinition, modelVersion,
+    scoreFieldsContractVersion: 'single-score/v1', canonicalField: 'score', precisionField: 'score_unrounded',
+    diagnosticFields: objectType === 'account' ? ['weighted_raw_value', 'weighted_effective_value'] : [],
+    diagnosticScale: objectType === 'account' ? 'model-native' : 'none' };
 }
 
 export function validateScoreSemantics(metadata, { allowLegacy = true } = {}) {

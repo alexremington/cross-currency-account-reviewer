@@ -4,7 +4,7 @@ import { legacyScoreSemantics } from './score-semantics.js';
 function csvCell(value) { const text = String(value ?? ''); return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 export function toCsv(rows, columns) { return [columns.join(','), ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(','))].join('\n') + '\n'; }
 
-const LEDGER_VERSION = 'cross-currency-score-ledger/v1';
+const LEDGER_VERSION = 'cross-currency-score-ledger/v2';
 const SCORE_SEMANTICS = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-26-evidence-aware', populationDefinition: 'admitted cross-currency Account candidate pairs' });
 const RECOMMENDED_MASTER_FIELDS = [
   ['id', 'recommendedMasterId'], ['name', 'recommendedMasterName'], ['currencyisocode', 'recommendedMasterCurrencyIsoCode'],
@@ -13,7 +13,7 @@ const RECOMMENDED_MASTER_FIELDS = [
   ['billingcountry', 'recommendedMasterBillingCountry'], ['ultimate_parent_account__c', 'recommendedMasterUltimateParentAccount']
 ];
 const LEDGER_COLUMNS = [
-  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'operationalScore', 'rawWeightedScore', 'effectiveWeightedScore', 'fieldTreatments', 'band', 'scoreContractVersion', 'scoreSemantics', 'surface', 'populationDefinition', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
+  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'scoreUnrounded', 'weightedRawValue', 'weightedEffectiveValue', 'fieldTreatments', 'band', 'scoreContractVersion', 'scoreSemantics', 'scoreFieldsContractVersion', 'canonicalField', 'precisionField', 'diagnosticFields', 'diagnosticScale', 'surface', 'populationDefinition', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   ...RECOMMENDED_MASTER_FIELDS.map(([, column]) => column),
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
@@ -48,10 +48,10 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       pairKey: [pair.leftId, pair.rightId].sort().join('|'),
       left: { id: pair.leftId, currency: rawField(left, 'currencyisocode') },
       right: { id: pair.rightId, currency: rawField(right, 'currencyisocode') },
-      score: pair.score,
-      operationalScore: pair.operationalScore,
-      rawWeightedScore: pair.rawWeightedScore ?? pair.score,
-      effectiveWeightedScore: pair.effectiveWeightedScore ?? pair.score,
+      score: Math.round(pair.score),
+      scoreUnrounded: pair.score,
+      weightedRawValue: pair.rawWeightedScore ?? pair.score,
+      weightedEffectiveValue: pair.effectiveWeightedScore ?? pair.score,
       ...SCORE_SEMANTICS,
       fieldTreatments: pair.fieldTreatments || [],
       band: pair.band,
@@ -97,7 +97,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const rows = ledgerRecords.map((item) => {
     const row = {
       pairKey: item.pairKey, leftId: item.left.id, leftCurrency: item.left.currency, rightId: item.right.id, rightCurrency: item.right.currency,
-      score: item.score, operationalScore: item.operationalScore, rawWeightedScore: item.rawWeightedScore, effectiveWeightedScore: item.effectiveWeightedScore, fieldTreatments: JSON.stringify(item.fieldTreatments), band: item.band, ...SCORE_SEMANTICS, modelVersion: item.modelVersion,
+      score: item.score, scoreUnrounded: item.scoreUnrounded, weightedRawValue: item.weightedRawValue, weightedEffectiveValue: item.weightedEffectiveValue, fieldTreatments: JSON.stringify(item.fieldTreatments), band: item.band, ...SCORE_SEMANTICS, modelVersion: item.modelVersion,
       accountNameRelationship: item.accountNameRelationship, accountNameRelationshipReason: item.accountNameRelationshipReason,
       contradictionCategory: item.contradictionCategory, contradictionReason: item.contradictionReason,
       exactConfidenceRule: item.exactConfidenceRule, intermediateConfidenceRule: item.intermediateConfidenceRule,
