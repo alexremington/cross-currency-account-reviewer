@@ -1,0 +1,3 @@
+- [x] Port Account evidence-policy corrections from the private scorer.
+- [x] Add named Cross Currency regressions.
+- [x] Run Cross Currency checks and UI smoke before push.

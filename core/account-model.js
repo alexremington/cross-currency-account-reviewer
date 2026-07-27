@@ -72,7 +72,8 @@ const EXACT_RULE_SCORES = {
 const INTERMEDIATE_RULE_SCORES = {
   'near-name-website-address': 94,
   'near-name-website-phone': 93,
-  'exact-name-only': 90
+  'exact-name-only': 90,
+  'exact-website-phone-cross-currency': 94
 };
 
 function clamp(value) { return Math.max(0, Math.min(100, Math.round(value))); }
@@ -108,6 +109,24 @@ function accountNameSimilarity(left, right) {
   const a = canonicalName(left); const b = canonicalName(right);
   if (a === b) return 1;
   return similarity(a, b);
+}
+
+function hasMaterialAsymmetricNameConflict(left, right) {
+  const leftTokens = canonicalNameTokens(left); const rightTokens = canonicalNameTokens(right);
+  const shorter = leftTokens.length <= rightTokens.length ? leftTokens : rightTokens;
+  const longer = leftTokens.length <= rightTokens.length ? rightTokens : leftTokens;
+  const extra = longer.filter((token) => !shorter.includes(token));
+  return extra.length > 0 && extra.some((token) => token.length <= 3 || extra.length >= 2);
+}
+
+function hasCountryBearingNameConflict(left, right) {
+  const leftCountry = normalizeText(left.billingCountry); const rightCountry = normalizeText(right.billingCountry);
+  if (!leftCountry || !rightCountry || leftCountry === rightCountry) return false;
+  const contains = (name, country) => {
+    const nameTokens = canonicalNameTokens(name); const countryTokens = canonicalNameTokens(country);
+    return countryTokens.length > 0 && nameTokens.some((_, index) => countryTokens.every((token, offset) => nameTokens[index + offset] === token));
+  };
+  return contains(left.name, leftCountry) || contains(right.name, rightCountry);
 }
 
 function normalizedEditSimilarity(left, right) {
@@ -204,6 +223,7 @@ function accountNameRelationship(nameScore, left, right) {
   if (!meaningful(left.name) || !meaningful(right.name)) return { kind: 'missing-name', reason: 'Missing usable account name.' };
   const leftTokens = new Set(canonicalNameTokens(left.name)); const rightTokens = new Set(canonicalNameTokens(right.name));
   if (nameScore === 1) return { kind: 'same-level-exact', reason: 'Exact normalized account name.' };
+  if (hasCountryBearingNameConflict(left, right)) return { kind: 'country-name-conflict', reason: 'Account name identifies a country that conflicts with billing country.' };
   const shorter = leftTokens.size <= rightTokens.size ? leftTokens : rightTokens;
   const longer = leftTokens.size <= rightTokens.size ? rightTokens : leftTokens;
   const extra = [...longer].filter((item) => !shorter.has(item));
@@ -223,9 +243,12 @@ function accountNameRelationship(nameScore, left, right) {
 function adapt(record) {
   const websiteEvidence = validateWebsite(record.website, record.name);
   const phoneEvidence = validatePhone(record.phone);
+  const name = normalizeComparableInput(record.name);
+  const rawUltimateParentAccount = normalizeComparableInput(record.ultimate_parent_account__c);
+  const ultimateParentAccount = canonicalName(name) && canonicalName(name) === canonicalName(rawUltimateParentAccount) ? '' : rawUltimateParentAccount;
   return {
     ...record,
-    name: normalizeComparableInput(record.name),
+    name,
     rawWebsite: String(record.website ?? ''),
     rawPhone: String(record.phone ?? ''),
     website: websiteEvidence.status === 'valid' ? websiteEvidence.value : '',
@@ -238,13 +261,16 @@ function adapt(record) {
     billingPostalCode: normalizeComparableInput(record.billingpostalcode),
     billingCountry: normalizeComparableInput(record.billingcountry),
     accountCurrency: normalizeComparableInput(record.currencyisocode),
-    ultimateParentAccount: normalizeComparableInput(record.ultimate_parent_account__c)
+    ultimateParentAccount
   };
 }
 
 function fieldScores(left, right) {
+  let name = accountNameSimilarity(left.name, right.name);
+  if (name != null && hasCountryBearingNameConflict(left, right)) name = Math.min(name, 0.15);
+  else if (name != null && hasMaterialAsymmetricNameConflict(left.name, right.name)) name = Math.min(name, 0.72);
   return {
-    name: accountNameSimilarity(left.name, right.name),
+    name,
     website: websiteScore(left.website, right.website),
     phone: phoneScore(left.phone, right.phone),
     billingStreet: addressScore(left.billingStreet, right.billingStreet),
@@ -267,13 +293,16 @@ function billingAddressScore(scores) {
 
 function strongBillingAddressScore(scores) {
   const street = scores.billingStreet;
-  const locality = [scores.billingPostalCode, scores.billingCity, scores.billingState].some((score) => score === 1);
+  const locality = (scores.billingCountry === 1 && scores.billingCity === 1) || (scores.billingCountry === 1 && scores.billingPostalCode === 1);
   return street != null && street >= 0.82 && (locality || street === 1);
 }
 
 function decisiveAddressConflict(scores, left, right) {
-  const comparable = ['billingCity', 'billingState', 'billingPostalCode', 'billingCountry'].filter((field) => meaningful(left[field]) && meaningful(right[field]));
-  return comparable.length > 0 && comparable.some((field) => scores[field] === 0) && (scores.billingCity === 0 || scores.billingState === 0 || scores.billingPostalCode === 0 || scores.billingCountry === 0);
+  const countryComparable = meaningful(left.billingCountry) && meaningful(right.billingCountry);
+  const cityComparable = meaningful(left.billingCity) && meaningful(right.billingCity);
+  const postalComparable = meaningful(left.billingPostalCode) && meaningful(right.billingPostalCode);
+  const cityCountryAligned = scores.billingCountry === 1 && scores.billingCity === 1;
+  return (countryComparable && scores.billingCountry === 0) || (cityComparable && countryComparable && scores.billingCity === 0) || (postalComparable && scores.billingPostalCode === 0 && !cityCountryAligned);
 }
 
 function sameLevelIdentityBundle(scores, left, right) {
@@ -302,11 +331,14 @@ function weightedScore(scores, left, right) {
   const effectiveScores = parentNeutralized ? { ...scores, ultimateParentAccount: null } : scores;
   const effective = calculate(effectiveScores);
   let value = effective.value;
+  if (relationship.kind === 'country-name-conflict') value = Math.min(value, 69);
   if (relationship.kind === 'hierarchy-expansion') value = Math.min(value, 83);
   if (relationship.kind === 'scope-divergence') value = Math.min(value, 78);
   if (relationship.kind === 'material-token-conflict') value = Math.min(value, 79);
   const hasCorroboration = [scores.website, scores.phone, scores.ultimateParentAccount].some((score) => score != null && score >= 0.9) || strongBillingAddressScore(scores);
   if ((scores.name || 0) >= 0.95 && !hasCorroboration) value = Math.min(value, 89);
+  const exactWebsitePhoneCrossCurrency = scores.website === 1 && scores.phone === 1 && scores.accountCurrency == null && relationship.kind !== 'hierarchy-expansion' && relationship.kind !== 'country-name-conflict' && !decisiveAddressConflict(scores, left, right);
+  if (exactWebsitePhoneCrossCurrency) value = Math.max(value, Math.min(99, 88 + (scores.name || 0) * 8 + (scores.billingCountry === 1 ? 4 : 0)));
   return { value: clamp(value), rawWeightedScore: raw.value, effectiveWeightedScore: clamp(value), discounted: raw.discounted || effective.discounted, nameRelationship: relationship, fieldTreatments: parentNeutralized ? [{ field: 'ultimateParentAccount', treatment: 'neutralized', reason: 'parent-conflict-neutralized-by-same-level-identity' }] : [], parentNeutralized };
 }
 
@@ -332,6 +364,7 @@ function intermediateRule(scores, relationship) {
   if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9)) return '';
   const address = Boolean(scores.billingStreet != null && billingAddressScore(scores) >= 0.82);
   if (scores.name === 1) return 'exact-name-only';
+  if (scores.website === 1 && scores.phone === 1 && scores.accountCurrency == null) return 'exact-website-phone-cross-currency';
   if (relationship.kind === 'same-level-equivalent' && scores.name >= 0.95 && scores.website === 1 && address) return 'near-name-website-address';
   if (relationship.kind === 'same-level-equivalent' && scores.name >= 0.95 && scores.website === 1 && scores.phone === 1) return 'near-name-website-phone';
   return '';
@@ -388,12 +421,13 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   const addressConflict = decisiveAddressConflict(scores, left, right);
   const parentNeutralized = weighted.parentNeutralized;
   const hasConflict = Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && score != null && score < 0.9 && !(field === 'phone' && score > 0) && !(field === 'ultimateParentAccount' && parentNeutralized));
-  const contradictionCategory = addressConflict ? 'decisive-address-conflict' : hasConflict ? 'field-conflict' : parentNeutralized ? 'parent-conflict-neutralized' : '';
+  const contradictionCategory = addressConflict ? 'decisive-address-conflict' : relationship.kind === 'country-name-conflict' ? 'country-name-conflict' : hasConflict ? 'field-conflict' : parentNeutralized ? 'parent-conflict-neutralized' : '';
   const reasons = [];
   if (scores.name === 1) reasons.push('Exact account name');
   else if ((scores.name || 0) >= 0.88) reasons.push('Near-exact account name');
   if (scores.website === 1) reasons.push('Exact website');
   if (scores.phone === 1) reasons.push('Exact phone');
+  if (scores.website === 1 && scores.phone === 1) reasons.push('Exact website + phone corroboration');
   else if ((scores.phone || 0) > 0) reasons.push('Partial phone corroboration');
   if (billingAddressScore(scores) >= 0.9) reasons.push('Aligned billing address');
   if (scores.ultimateParentAccount === 1) reasons.push('Matching ultimate parent account');
@@ -401,6 +435,7 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   if (weighted.discounted) reasons.push('Common shared fields discounted');
   if (relationship.kind === 'scope-divergence') reasons.push('Different account scope');
   if (relationship.kind === 'hierarchy-expansion') reasons.push('Different branch or department under parent');
+  if (relationship.kind === 'country-name-conflict') reasons.push('Account name identifies a country that conflicts with billing country');
   if (lane === 'weighted-review') reasons.push('Missing exact-confidence corroboration bundle');
   if (left.websiteEvidence.status === 'invalid' || right.websiteEvidence.status === 'invalid') reasons.push('Website ignored as invalid');
   if (left.phoneEvidence.status === 'invalid' || right.phoneEvidence.status === 'invalid') reasons.push('Phone ignored as invalid');

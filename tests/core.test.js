@@ -19,6 +19,18 @@ test('named regression: one corroborator cannot bypass a conflicting parent', ()
   assert.ok(pair.score < 95); assert.equal(pair.exactConfidenceRule, ''); assert.equal(pair.fieldTreatments.length, 0);
 });
 
+test('named regression: Cross Currency mirrors Account country and address contradiction policy', () => {
+  const country = scorePair({ id: 'CO1', name: 'Permanent Mission of the Russian Federation to the EU', currencyisocode: 'EUR', billingcountry: 'Russian Federation' }, { id: 'CO2', name: 'Permanent Mission to the EU', currencyisocode: 'USD', billingcountry: 'Singapore' });
+  assert.equal(country.contradictionCategory, 'decisive-address-conflict'); assert.ok(country.score < 70); assert.ok(country.reasons.includes('Account name identifies a country that conflicts with billing country'));
+  const address = scorePair({ id: 'AD1', name: 'Address Example', currencyisocode: 'USD', billingstreet: '1 Main', billingcity: 'Austin', billingpostalcode: '78701', billingcountry: 'US' }, { id: 'AD2', name: 'Address Example', currencyisocode: 'EUR', billingstreet: '99 Other', billingcity: 'Austin', billingpostalcode: '78702', billingcountry: 'US' });
+  assert.notEqual(address.addressCategory, 'decisive-address-conflict');
+});
+
+test('named regression: Cross Currency exact website and phone corroboration resists benign name expansion', () => {
+  const pair = scorePair({ id: 'BI1', name: 'Institut Barcelona d Estudis Internacionals', currencyisocode: 'EUR', website: 'ibei.org', phone: '+34 935423030', billingcountry: 'Spain' }, { id: 'BI2', name: 'The Institut Barcelona d Estudis Internacionals (IBEI)', currencyisocode: 'USD', website: 'ibei.org', phone: '+34 93 542 30 30', billingcountry: 'Spain' });
+  assert.ok(pair.score >= 90);
+});
+
 test('named regression: website host normalization and contextual exceptions are stable', () => {
   const match = scorePair({ id: 'LG-1', name: 'LG Electronics', currencyisocode: 'USD', website: 'lg.com/us' }, { id: 'LG-2', name: 'LG Electronics', currencyisocode: 'EUR', website: 'https://www.lg.com' });
   assert.equal(match.fieldScores.website, 1);
