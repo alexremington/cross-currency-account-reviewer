@@ -1,0 +1,4 @@
+- [x] Add shared score semantics metadata to Cross Currency JSON and CSV ledgers.
+- [x] Add v6 contract constants and regressions.
+- [ ] Reconcile Cross Currency labels with the shared calibration protocol.
+- [ ] Publish calibrated v6 only after held-out evidence and staging handoff proof.
