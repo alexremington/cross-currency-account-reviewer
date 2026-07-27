@@ -1,0 +1,4 @@
+- [x] Preserve direct and ultimate parent fields in Account parsing and scoring.
+- [x] Add sanitized hierarchy parity fixtures and named regressions.
+- [x] Verify currency eligibility and proposal/export behavior remain unchanged.
+- [x] Run unit, check, Windows, parity, and Playwright smoke gates.

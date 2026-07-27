@@ -1,0 +1,3 @@
+- Duplicate Reviewer Account semantics remain the parity reference.
+- This repository changes Accounts only; Contacts and private runtime workflows remain out of scope.
+- Production IDs and exports remain outside the repository.

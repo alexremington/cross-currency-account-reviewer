@@ -4,10 +4,11 @@ const HEADER_ALIASES = new Map([
   ['accountid', 'id'], ['salesforceid', 'id'], ['currency', 'currencyisocode'],
   ['currencyiso', 'currencyisocode'], ['accountcurrency', 'currencyisocode'],
   ['accountname', 'name'], ['account_name', 'name'], ['url', 'website'],
-  ['billingpostalcode', 'billingpostalcode'], ['billingzip', 'billingpostalcode']
+  ['billingpostalcode', 'billingpostalcode'], ['billingzip', 'billingpostalcode'],
+  ['parent.name', 'parent_name'], ['parentname', 'parent_name'], ['parent_name', 'parent_name'], ['parent', 'parent_name']
 ]);
 
-export const OPTIONAL_HEADERS = ['website', 'phone', 'billingstreet', 'billingcity', 'billingstate', 'billingpostalcode', 'billingcountry', 'ultimate_parent_account__c', 'lastmodifieddate'];
+export const OPTIONAL_HEADERS = ['website', 'phone', 'billingstreet', 'billingcity', 'billingstate', 'billingpostalcode', 'billingcountry', 'parent_name', 'ultimate_parent_account__c', 'lastmodifieddate'];
 
 export const REVIEW_FIELD_CATALOG = [
   { key: 'name', label: 'Account Name', sourceFields: ['Name'], role: 'required identity evidence' },
@@ -15,12 +16,13 @@ export const REVIEW_FIELD_CATALOG = [
   { key: 'website', label: 'Website', sourceFields: ['Website'], role: 'corroborating identity evidence' },
   { key: 'phone', label: 'Phone', sourceFields: ['Phone'], role: 'corroborating identity evidence' },
   { key: 'address', label: 'Billing address', sourceFields: ['BillingStreet', 'BillingCity', 'BillingState', 'BillingPostalCode', 'BillingCountry'], role: 'corroborating identity evidence', derived: true },
+  { key: 'parent_name', label: 'Direct Parent Account', sourceFields: ['Parent.Name'], role: 'hierarchy evidence' },
   { key: 'ultimate_parent_account__c', label: 'Ultimate Parent Account', sourceFields: ['Ultimate_Parent_Account__c'], role: 'corroborating identity evidence' }
 ];
 
 export const IMPORT_FIELD_CATALOG = [
   { label: 'Required for import', fields: ['Id', 'Name', 'CurrencyIsoCode'], description: 'Required to validate and route account rows.' },
-  { label: 'Used in scoring', fields: ['Name', 'CurrencyIsoCode', 'Website', 'Phone', 'BillingStreet', 'BillingCity', 'BillingState', 'BillingPostalCode', 'BillingCountry', 'Ultimate_Parent_Account__c'], description: 'Compared after deterministic normalization.' },
+  { label: 'Used in scoring', fields: ['Name', 'CurrencyIsoCode', 'Website', 'Phone', 'BillingStreet', 'BillingCity', 'BillingState', 'BillingPostalCode', 'BillingCountry', 'Parent.Name', 'Ultimate_Parent_Account__c'], description: 'Compared after deterministic normalization.' },
   { label: 'Imported but not scored', fields: ['LastModifiedDate'], description: 'Preserved as source data but does not affect the score.' }
 ];
 

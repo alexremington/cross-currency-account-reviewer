@@ -13,17 +13,18 @@ const RECOMMENDED_MASTER_FIELDS = [
   ['billingcountry', 'recommendedMasterBillingCountry'], ['ultimate_parent_account__c', 'recommendedMasterUltimateParentAccount']
 ];
 const LEDGER_COLUMNS = [
-  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'scoreUnrounded', 'weightedRawValue', 'weightedEffectiveValue', 'fieldTreatments', 'band', 'scoreContractVersion', 'scoreSemantics', 'scoreFieldsContractVersion', 'canonicalField', 'precisionField', 'diagnosticFields', 'diagnosticScale', 'surface', 'populationDefinition', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
+  'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'scoreUnrounded', 'weightedRawValue', 'weightedEffectiveValue', 'fieldTreatments', 'band', 'scoreContractVersion', 'scoreSemantics', 'scoreFieldsContractVersion', 'canonicalField', 'precisionField', 'diagnosticFields', 'diagnosticScale', 'surface', 'populationDefinition', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'hierarchyRelationship', 'hierarchyEvidence', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   ...RECOMMENDED_MASTER_FIELDS.map(([, column]) => column),
   'nameStatus', 'nameLeftRaw', 'nameLeftNormalized', 'nameRightRaw', 'nameRightNormalized',
   'websiteStatus', 'websiteLeftRaw', 'websiteLeftNormalized', 'websiteRightRaw', 'websiteRightNormalized',
   'phoneStatus', 'phoneLeftRaw', 'phoneLeftNormalized', 'phoneRightRaw', 'phoneRightNormalized',
   'billingAddressStatus', 'billingAddressLeftRaw', 'billingAddressLeftNormalized', 'billingAddressRightRaw', 'billingAddressRightNormalized',
+  'directParentAccountStatus', 'directParentAccountLeftRaw', 'directParentAccountLeftNormalized', 'directParentAccountRightRaw', 'directParentAccountRightNormalized',
   'ultimateParentAccountStatus', 'ultimateParentAccountLeftRaw', 'ultimateParentAccountLeftNormalized', 'ultimateParentAccountRightRaw', 'ultimateParentAccountRightNormalized'
 ];
 const evidenceColumns = [
-  ['name', 'name'], ['website', 'website'], ['phone', 'phone'], ['address', 'billingAddress'], ['ultimate_parent_account__c', 'ultimateParentAccount']
+  ['name', 'name'], ['website', 'website'], ['phone', 'phone'], ['address', 'billingAddress'], ['parent_name', 'directParentAccount'], ['ultimate_parent_account__c', 'ultimateParentAccount']
 ];
 const rawField = (record, field) => record.__raw?.[field] ?? record[field] ?? '';
 const rawEvidence = (record, field) => field === 'address'
@@ -58,6 +59,8 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       modelVersion: pair.modelVersion || '',
       accountNameRelationship: pair.accountNameRelationship || '',
       accountNameRelationshipReason: pair.accountNameRelationshipReason || '',
+      hierarchyRelationship: pair.hierarchyRelationship || 'none',
+      hierarchyEvidence: pair.hierarchyEvidence || {},
       contradictionCategory: pair.contradictionCategory || '',
       contradictionReason: pair.contradictionReason || '',
       exactConfidenceRule: pair.exactConfidenceRule || '',
@@ -99,6 +102,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       pairKey: item.pairKey, leftId: item.left.id, leftCurrency: item.left.currency, rightId: item.right.id, rightCurrency: item.right.currency,
       score: item.score, scoreUnrounded: item.scoreUnrounded, weightedRawValue: item.weightedRawValue, weightedEffectiveValue: item.weightedEffectiveValue, fieldTreatments: JSON.stringify(item.fieldTreatments), band: item.band, ...SCORE_SEMANTICS, modelVersion: item.modelVersion,
       accountNameRelationship: item.accountNameRelationship, accountNameRelationshipReason: item.accountNameRelationshipReason,
+      hierarchyRelationship: item.hierarchyRelationship, hierarchyEvidence: JSON.stringify(item.hierarchyEvidence),
       contradictionCategory: item.contradictionCategory, contradictionReason: item.contradictionReason,
       exactConfidenceRule: item.exactConfidenceRule, intermediateConfidenceRule: item.intermediateConfidenceRule,
       exactConfidenceEligible: item.exactConfidenceEligible, intermediateConfidenceEligible: item.intermediateConfidenceEligible,

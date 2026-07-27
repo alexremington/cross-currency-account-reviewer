@@ -111,6 +111,22 @@ function accountNameSimilarity(left, right) {
   return similarity(a, b);
 }
 
+function hierarchyNameMatch(left, right) {
+  if (!meaningful(left) || !meaningful(right)) return false;
+  const normalizeHierarchyName = (value) => canonicalName(value).replace(/\bdept\b/g, 'department').replace(/\bdos\b/g, '');
+  const a = normalizeHierarchyName(left).trim(); const b = normalizeHierarchyName(right).trim();
+  return a === b || (similarity(a, b) || 0) >= 0.8;
+}
+
+function hierarchyRelationship(left, right) {
+  const leftParent = left.parent_name;
+  const rightParent = right.parent_name;
+  const leftParentIsRight = hierarchyNameMatch(leftParent, right.name);
+  const rightParentIsLeft = hierarchyNameMatch(rightParent, left.name);
+  const siblings = meaningful(leftParent) && meaningful(rightParent) && hierarchyNameMatch(leftParent, rightParent);
+  return { parentChild: Boolean(leftParentIsRight || rightParentIsLeft), siblings: Boolean(siblings && !leftParentIsRight && !rightParentIsLeft) };
+}
+
 function hasMaterialAsymmetricNameConflict(left, right) {
   const leftTokens = canonicalNameTokens(left); const rightTokens = canonicalNameTokens(right);
   const shorter = leftTokens.length <= rightTokens.length ? leftTokens : rightTokens;
@@ -223,6 +239,8 @@ function accountNameRelationship(nameScore, left, right) {
   if (!meaningful(left.name) || !meaningful(right.name)) return { kind: 'missing-name', reason: 'Missing usable account name.' };
   const leftTokens = new Set(canonicalNameTokens(left.name)); const rightTokens = new Set(canonicalNameTokens(right.name));
   if (nameScore === 1) return { kind: 'same-level-exact', reason: 'Exact normalized account name.' };
+  const hierarchy = hierarchyRelationship(left, right);
+  if (hierarchy.parentChild || hierarchy.siblings) return { kind: 'hierarchy-expansion', reason: hierarchy.parentChild ? 'Direct parent/child hierarchy evidence.' : 'Shared direct parent hierarchy evidence.' };
   if (hasCountryBearingNameConflict(left, right)) return { kind: 'country-name-conflict', reason: 'Account name identifies a country that conflicts with billing country.' };
   const shorter = leftTokens.size <= rightTokens.size ? leftTokens : rightTokens;
   const longer = leftTokens.size <= rightTokens.size ? rightTokens : leftTokens;
@@ -244,7 +262,9 @@ function adapt(record) {
   const websiteEvidence = validateWebsite(record.website, record.name);
   const phoneEvidence = validatePhone(record.phone);
   const name = normalizeComparableInput(record.name);
-  const rawUltimateParentAccount = normalizeComparableInput(record.ultimate_parent_account__c);
+  const rawDirectParentAccount = normalizeComparableInput(record.parent_name);
+  const mappedUltimateParentAccount = normalizeComparableInput(record.ultimate_parent_account__c);
+  const rawUltimateParentAccount = mappedUltimateParentAccount || (!meaningful(record.ultimate_parent_account__c) ? rawDirectParentAccount : '');
   const ultimateParentAccount = canonicalName(name) && canonicalName(name) === canonicalName(rawUltimateParentAccount) ? '' : rawUltimateParentAccount;
   return {
     ...record,
@@ -261,6 +281,8 @@ function adapt(record) {
     billingPostalCode: normalizeComparableInput(record.billingpostalcode),
     billingCountry: normalizeComparableInput(record.billingcountry),
     accountCurrency: normalizeComparableInput(record.currencyisocode),
+    parent_name: rawDirectParentAccount,
+    directParentAccountProvenance: rawDirectParentAccount ? 'explicit' : 'blank',
     ultimateParentAccount
   };
 }
@@ -361,6 +383,7 @@ function exactRule(scores, relationship, left, right) {
 }
 
 function intermediateRule(scores, relationship) {
+  if (relationship.kind === 'hierarchy-expansion' || relationship.kind === 'scope-divergence') return '';
   if (Object.entries(scores).some(([field, score]) => field !== 'accountCurrency' && field !== 'name' && score != null && score < 0.9)) return '';
   const address = Boolean(scores.billingStreet != null && billingAddressScore(scores) >= 0.82);
   if (scores.name === 1) return 'exact-name-only';
@@ -376,6 +399,7 @@ function evidence(left, right, scores) {
     ['website', 'Website', left.rawWebsite, right.rawWebsite, scores.website, left.websiteEvidence, right.websiteEvidence],
     ['phone', 'Phone', left.rawPhone, right.rawPhone, scores.phone, left.phoneEvidence, right.phoneEvidence],
     ['address', 'Billing address', normalizeAddress(left), normalizeAddress(right), billingAddressScore(scores)],
+    ['parent_name', 'Direct Parent Account', left.parent_name, right.parent_name, hierarchyNameMatch(left.parent_name, right.parent_name) ? 1 : (meaningful(left.parent_name) && meaningful(right.parent_name) ? 0 : null)],
     ['ultimate_parent_account__c', 'Ultimate Parent Account', left.ultimate_parent_account__c, right.ultimate_parent_account__c, scores.ultimateParentAccount]
   ];
   const addressHasAnchor = [left.billingStreet, left.billingCity, left.billingState, left.billingPostalCode, right.billingStreet, right.billingCity, right.billingState, right.billingPostalCode].some(meaningful);
@@ -413,6 +437,7 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   scores.accountCurrency = null;
   const weighted = weightedScore(scores, left, right);
   const relationship = weighted.nameRelationship || accountNameRelationship(scores.name || 0, left, right);
+  const hierarchy = hierarchyRelationship(left, right);
   const exactConfidenceRule = exactRule(scores, relationship, left, right);
   const intermediateConfidenceRule = exactConfidenceRule ? '' : intermediateRule(scores, relationship);
   const lane = exactConfidenceRule ? 'exact-confidence' : intermediateConfidenceRule ? 'intermediate-confidence' : 'weighted-review';
@@ -447,6 +472,8 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
     band: lane, lane, exactIdentity, currenciesDiffer, currencyLeft, currencyRight,
     modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, rawWeightedScore: weighted.rawWeightedScore, effectiveWeightedScore: weighted.effectiveWeightedScore, fieldTreatments: weighted.fieldTreatments,
     accountNameRelationship: relationship.kind,
+    hierarchyRelationship: hierarchy.parentChild ? 'parent-child' : hierarchy.siblings ? 'siblings' : 'none',
+    hierarchyEvidence: { directParentLeft: left.parent_name || '', directParentRight: right.parent_name || '', parentChild: hierarchy.parentChild, siblings: hierarchy.siblings },
     accountNameRelationshipReason: relationship.reason, contradictionCategory, contradictionReason: addressConflict ? 'Conflicting city, state, or postal geography.' : parentNeutralized ? 'parent-conflict-neutralized-by-same-level-identity' : hasConflict ? 'One or more comparable identity fields conflict.' : '', addressCategory: addressConflict ? 'decisive-address-conflict' : strongBillingAddressScore(scores) ? 'aligned' : 'minor-variation', exactConfidenceRule, intermediateConfidenceRule,
     exactConfidenceEligible: Boolean(exactConfidenceRule), intermediateConfidenceEligible: Boolean(intermediateConfidenceRule),
     sharedTaxonomy: { relationship: relationship.kind, promoted: lane !== 'weighted-review' },
@@ -465,6 +492,7 @@ function blockingKeys(record) {
   const phone = phoneEvidence.status === 'valid' ? phoneEvidence.value : '';
   const address = normalizeAddress(record);
   const parent = normalizeText(record.ultimate_parent_account__c);
+  const directParent = normalizeText(record.parent_name);
   const addressParts = [record.billingstreet, record.billingcity, record.billingstate, record.billingpostalcode].filter(meaningful);
   return [
     meaningful(record.name) && `name:${name.split(' ').slice(0, 3).join(' ')}`,
@@ -472,7 +500,9 @@ function blockingKeys(record) {
     meaningful(website) && `website:${website}`,
     phone.length >= 7 && `phone:${phone.slice(-7)}`,
     address && addressParts.length > 0 && `address:${address.slice(0, 24)}`,
-    meaningful(parent) && `parent:${parent}`
+    meaningful(parent) && `parent:${parent}`,
+    meaningful(directParent) && `direct-parent:${directParent}`,
+    meaningful(record.name) && meaningful(directParent) && `parent-of:${name}`
   ].filter(Boolean);
 }
 

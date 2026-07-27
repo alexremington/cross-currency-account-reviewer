@@ -31,6 +31,27 @@ test('named regression: Cross Currency exact website and phone corroboration res
   assert.ok(pair.score >= 90);
 });
 
+test('named regression: Cross Currency identifies direct parent versus department hierarchy', () => {
+  const pair = scorePair(
+    { id: 'DOS-CHILD', name: '(DOS) Western Hemisphere Affairs', currencyisocode: 'EUR', website: 'state.gov', phone: '2025550100', parent_name: 'U.S. Department of State (DOS)', ultimate_parent_account__c: 'U.S. Department of State (DOS)' },
+    { id: 'DOS-PARENT', name: 'U.S. DEPT. OF STATE', currencyisocode: 'USD', website: 'state.gov', phone: '2025550100', parent_name: 'U.S. DEPT. OF STATE', ultimate_parent_account__c: 'U.S. DEPT. OF STATE' }
+  );
+  assert.equal(pair.hierarchyRelationship, 'parent-child');
+  assert.equal(pair.accountNameRelationship, 'hierarchy-expansion');
+  assert.equal(pair.intermediateConfidenceEligible, false);
+  const ultimateOnly = scorePair(
+    { id: 'DOS-ULT-1', name: '(DOS) Western Hemisphere Affairs', currencyisocode: 'EUR', ultimate_parent_account__c: 'U.S. Department of State (DOS)' },
+    { id: 'DOS-ULT-2', name: 'U.S. DEPT. OF STATE', currencyisocode: 'USD', ultimate_parent_account__c: 'U.S. DEPT. OF STATE' }
+  );
+  assert.equal(ultimateOnly.hierarchyRelationship, 'none');
+  const ledger = buildScoreLedger([{ ...pair, leftId: 'DOS-CHILD', rightId: 'DOS-PARENT' }], [
+    { id: 'DOS-CHILD', name: '(DOS) Western Hemisphere Affairs', currencyisocode: 'EUR', parent_name: 'U.S. Department of State (DOS)' },
+    { id: 'DOS-PARENT', name: 'U.S. DEPT. OF STATE', currencyisocode: 'USD', parent_name: 'U.S. DEPT. OF STATE' }
+  ], { headers: ['Id', 'Name', 'CurrencyIsoCode', 'Parent.Name'] });
+  assert.equal(ledger.records[0].hierarchyRelationship, 'parent-child');
+  assert.match(ledger.csv, /hierarchyRelationship/);
+});
+
 test('named regression: website host normalization and contextual exceptions are stable', () => {
   const match = scorePair({ id: 'LG-1', name: 'LG Electronics', currencyisocode: 'USD', website: 'lg.com/us' }, { id: 'LG-2', name: 'LG Electronics', currencyisocode: 'EUR', website: 'https://www.lg.com' });
   assert.equal(match.fieldScores.website, 1);
@@ -244,7 +265,7 @@ test('proposal preserves source provenance and exports reconcile', () => {
 test('named regression: full score ledger reconciles every scored pair and preserves evidence', () => {
   const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet,LastModifiedDate\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main,2025-01-01\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main,2025-01-02');
   const pairs = generatePairs(parsed.rows); const result = buildScoreLedger(pairs, parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
-  assert.equal(result.records.length, pairs.length); assert.equal(result.records[0].score, 100); assert.equal(result.records[0].evidence.length, 5); assert.ok(result.records[0].evidence.some((item) => item.field === 'address' && item.status === 'matched'));
+  assert.equal(result.records.length, pairs.length); assert.equal(result.records[0].score, 100); assert.equal(result.records[0].evidence.length, 6); assert.ok(result.records[0].evidence.some((item) => item.field === 'address' && item.status === 'matched'));
   assert.match(result.csv, /pairKey/); assert.match(result.csv, /score,scoreUnrounded,weightedRawValue,weightedEffectiveValue/); assert.doesNotMatch(result.csv, /operationalScore|rawWeightedScore|effectiveWeightedScore/); assert.doesNotMatch(result.csv, /2025-01-01/); assert.match(result.json, /cross-currency-score-ledger\/v2/); assert.equal(result.source.recordCount, 2); assert.equal(result.summary.candidatePairCount, 1);
 });
 
