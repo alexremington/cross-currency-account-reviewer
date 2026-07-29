@@ -1,5 +1,7 @@
 # Capability Specification
 
+> Superseded for the active UI workflow by `openspec/changes/ledger-first-reviewer-flow/`. The scoring and ledger sections remain historical contract context; proposal review and proposal exports are no longer part of the active app.
+
 ## CSV validation
 
 The app MUST require `Id`, `Name`, and `CurrencyIsoCode`, reject duplicate IDs, report missing values, and support quoted CSV, BOM, CRLF, and Unicode input.

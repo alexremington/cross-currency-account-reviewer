@@ -1,6 +1,6 @@
 # Cross-Currency Account Reviewer
 
-Local-first browser app for reviewing Salesforce Account pairs that may represent the same company in different currencies.
+Local-first browser app for scoring Salesforce Account pairs that may represent the same company in different currencies and exporting the complete score ledger.
 
 ## Requirements
 
@@ -45,11 +45,8 @@ The app reads files locally in the browser. It does not upload data or connect t
 
 1. Export the Salesforce Account data as a CSV and keep the file on your computer.
 2. In the app, choose **Import Account CSV** and select the file.
-3. Review the validation message and field guide, then choose **Match now**.
-4. Download the **score ledger CSV** from the Outputs section. It contains one lean row per scored pair. Download the full ledger JSON for structured evidence, or the summary JSON for batch metadata and column definitions. These downloads do not require reviewing individual pairs.
-5. Select a pair in the queue to inspect its evidence and proposed multicurrency parent.
-6. Optionally override proposed values. Every override requires a reason.
-7. Choose a parent currency, then export the reviewed parent proposal, child associations, and audit files.
+3. Review the validation message and field guide, then choose **Match now** or **Match and download full score ledger**.
+4. Use the Outputs section to download the score ledger CSV, full ledger JSON, or summary JSON. These downloads do not require reviewing individual pairs.
 
 The app only creates local downloads. It does not insert records into Salesforce.
 
@@ -71,7 +68,7 @@ The score ledger includes deterministic `recommendedMaster*` columns for the sou
 
 ## Workflow
 
-Import a CSV, validate it, click **Match now**, download the complete score ledger, inspect the prioritized pair queue, review the proposed parent, optionally override fields with a reason, and export the reviewed parent proposal, child association, and audit files. The score ledger contains every scored pair, including pairs that have not been reviewed. A score of 100 is reserved for exact normalized identity evidence with different currencies.
+Import a CSV, validate it, match the records, and download the complete score ledger. The score ledger contains every scored pair, including pairs that have not been reviewed. A score of 100 is reserved for exact normalized identity evidence with different currencies.
 
 ## Development
 

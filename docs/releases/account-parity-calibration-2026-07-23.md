@@ -4,7 +4,7 @@ Release note: aligned Cross Currency Account scoring with canonical sparse-name,
 
 Evidence:
 
-- Cross Currency remains an independent runtime implementation with currency eligibility, proposal, ledger, export, and launcher contracts unchanged.
+- Cross Currency remains an independent runtime implementation with currency eligibility, ledger, and launcher contracts unchanged. The later `ledger-first-reviewer-flow` change retires the proposal-review UI and proposal exports from the active app.
 - Named regressions cover Science!/SCIENCE PO, country-only and sparse address evidence, aliases, hierarchy expansion, partial/genuine/area-only phone evidence, currency invariance, and Contact isolation.
 - The production-derived labeled calibration corpus is not present in the checkout, so calibration metrics were not fabricated.
 

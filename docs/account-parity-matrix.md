@@ -9,7 +9,7 @@ The matrix is intentionally explicit so a Cross Currency release cannot silently
 | Hierarchy, scope, address, ultimate-parent, reason and evidence taxonomy | canonical-account | Mirror explanatory metadata and preserve contradiction status. |
 | Populated unequal currencies | cross-currency-adapter | Eligibility only; never identity evidence. |
 | Blank/equal currencies | cross-currency-adapter | Exclude before candidate scoring. |
-| Candidate ledger, proposal, parent selection, and exports | cross-currency-adapter | Preserve Cross Currency contracts and workflow shape. |
+| Candidate ledger, recommended master, and exports | cross-currency-adapter | Preserve the score-ledger contracts and deterministic recommended-master fields. |
 | Merge thresholds, queue routing, Salesforce writes, producer/autoload operations | duplicate-reviewer-only | Not ported. |
 | Contact scoring and Contact UI/workflow | duplicate-reviewer-only | Not imported or changed by this app. |
 

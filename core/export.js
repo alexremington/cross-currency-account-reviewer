@@ -1,4 +1,4 @@
-import { buildProposal } from './proposals.js';
+import { selectRecommendedMaster } from './recommended-master.js';
 import { legacyScoreSemantics } from './score-semantics.js';
 
 function csvCell(value) { const text = String(value ?? ''); return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
@@ -36,8 +36,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   const ledgerRecords = pairs.map((pair) => {
     const left = byId.get(pair.leftId) || {};
     const right = byId.get(pair.rightId) || {};
-    const proposal = buildProposal(left, right, pair);
-    const recommendedMaster = byId.get(proposal.recommendedMasterId) || {};
+    const recommendedMaster = selectRecommendedMaster(left, right) || {};
     const evidence = pair.evidence.map((item) => ({
       field: item.field,
       label: item.label,
@@ -123,15 +122,4 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
   });
   const columns = LEDGER_COLUMNS;
   return { ...document, rows, columns, summary, csv: toCsv(rows, columns), json: JSON.stringify(document, null, 2), summaryJson: JSON.stringify(summary, null, 2), version: LEDGER_VERSION };
-}
-
-export function buildExports(reviewed) {
-  const parents = reviewed.map((item) => {
-    const row = { proposalVersion: item.proposal.proposalVersion, pairKey: item.proposal.pairKey, sourceAccountIds: item.proposal.sourceAccountIds.join(';'), parentCurrency: item.proposal.parentCurrency, score: item.proposal.score, reasons: item.proposal.reasons.join(' | ') };
-    for (const [field, detail] of Object.entries(item.proposal.fields)) { row[field] = detail.value; row[`${field}Source`] = detail.sourceId; row[`${field}Overridden`] = detail.overridden ? 'true' : 'false'; }
-    return row;
-  });
-  const associations = reviewed.flatMap((item) => item.proposal.sourceAccountIds.map((childId) => ({ proposalVersion: item.proposal.proposalVersion, pairKey: item.proposal.pairKey, parentProposalKey: item.proposal.pairKey, childAccountId: childId, score: item.proposal.score })));
-  const audit = reviewed.map((item) => ({ exportedAt: new Date().toISOString(), pair: item.pair, proposal: item.proposal }));
-  return { parents, associations, audit, parentCsv: toCsv(parents, Object.keys(parents[0] || { proposalVersion: '' })), associationCsv: toCsv(associations, ['proposalVersion', 'pairKey', 'parentProposalKey', 'childAccountId', 'score']), auditJson: JSON.stringify({ auditVersion: 'cross-currency-review-audit/v1', records: audit }, null, 2) };
 }
