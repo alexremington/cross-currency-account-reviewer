@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseCsv, normalizeWebsite } from '../core/csv.js';
 import { generatePairs, scorePair } from '../core/scoring.js';
 import { ACCOUNT_MODEL_VERSION } from '../core/account-model.js';
-import { buildScoreLedger } from '../core/export.js';
+import { buildScoreLedger, CSV_CHUNK_TARGET_BYTES, toCsv, toCsvChunks } from '../core/export.js';
 import parityFixtures from './fixtures/account-model-parity.json' with { type: 'json' };
 
 const fixture = `Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main`;
@@ -264,6 +264,23 @@ test('named regression: ledger preserves source cells and complete zero-pair sch
   const cross = parseCsv('Id,Name,CurrencyIsoCode,Website\nB,Acme Media,EUR,https://www.acme.example.com\nA," Acme Media ",USD," https://acme.example.com "');
   const ledger = buildScoreLedger(generatePairs(cross.rows), cross.rows, { fileName: 'accounts.csv' });
   assert.equal(ledger.records[0].pairKey, 'A|B'); assert.equal(ledger.records[0].left.id, 'A'); assert.equal(ledger.records[0].evidence.find((item) => item.field === 'name').left.raw, ' Acme Media '); assert.match(ledger.summaryJson, /pairColumns/);
+});
+
+test('named regression: large score ledger CSV is chunked without changing reconstruction', () => {
+  const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website\nA,Acme Media,USD,https://acme.example.com\nB,Acme Media,EUR,https://acme.example.com');
+  const result = buildScoreLedger(generatePairs(parsed.rows), parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
+  assert.ok(result.csvChunks.length >= 1);
+  assert.ok(result.csvChunks.every((chunk) => chunk.length <= CSV_CHUNK_TARGET_BYTES));
+  assert.equal(result.csvChunks.join(''), result.csv);
+});
+
+test('named regression: production-shaped CSV forces multiple bounded chunks', () => {
+  const rows = Array.from({ length: 200 }, (_, index) => ({ pairKey: `PAIR-${index}`, evidence: 'e'.repeat(600) }));
+  const columns = ['pairKey', 'evidence'];
+  const chunks = toCsvChunks(rows, columns);
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every((chunk) => chunk.length <= CSV_CHUNK_TARGET_BYTES));
+  assert.equal(chunks.join(''), toCsv(rows, columns));
 });
 
 test('named regression: invalid typed Account values are auditable and unavailable', () => {

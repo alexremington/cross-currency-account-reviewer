@@ -45,7 +45,7 @@ function renderExports() {
 
 function download(name, content, type) {
   const link = document.createElement('a');
-  const url = URL.createObjectURL(new Blob([content], { type }));
+  const url = URL.createObjectURL(new Blob(Array.isArray(content) ? content : [content], { type }));
   link.href = url;
   link.download = name;
   link.className = 'download-anchor';
@@ -85,7 +85,7 @@ async function runMatch({ downloadCsv = false } = {}) {
     matchRecords();
     if (downloadCsv) {
       const result = ledger();
-      download('score-ledger.csv', result.csv, 'text/csv');
+      download('score-ledger.csv', result.csvChunks, 'text/csv');
       state.hasMatched = true;
       toast(`Matched ${result.records.length} scored pair${result.records.length === 1 ? '' : 's'} and downloaded score-ledger.csv.`);
     } else {
@@ -105,7 +105,7 @@ async function runMatch({ downloadCsv = false } = {}) {
 $('#export-ledger-csv').addEventListener('click', () => {
   try {
     const result = ledger();
-    download('score-ledger.csv', result.csv, 'text/csv');
+    download('score-ledger.csv', result.csvChunks, 'text/csv');
     toast(`Downloaded score-ledger.csv with ${result.records.length} scored pair${result.records.length === 1 ? '' : 's'}.`);
   } catch (error) {
     setStatus('Download failed', 'error');

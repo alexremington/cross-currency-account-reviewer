@@ -2,7 +2,23 @@ import { selectRecommendedMaster } from './recommended-master.js';
 import { legacyScoreSemantics } from './score-semantics.js';
 
 function csvCell(value) { const text = String(value ?? ''); return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
-export function toCsv(rows, columns) { return [columns.join(','), ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(','))].join('\n') + '\n'; }
+export const CSV_CHUNK_TARGET_BYTES = 64 * 1024;
+export function toCsvChunks(rows, columns, targetLength = CSV_CHUNK_TARGET_BYTES) {
+  const chunks = [];
+  let chunk = `${columns.join(',')}\n`;
+  for (const row of rows) {
+    const line = `${columns.map((column) => csvCell(row[column])).join(',')}\n`;
+    if (chunk.length > columns.length && chunk.length + line.length > targetLength) {
+      chunks.push(chunk);
+      chunk = line;
+    } else {
+      chunk += line;
+    }
+  }
+  if (chunk) chunks.push(chunk);
+  return chunks;
+}
+export function toCsv(rows, columns) { return toCsvChunks(rows, columns).join(''); }
 
 const LEDGER_VERSION = 'cross-currency-score-ledger/v2';
 const SCORE_SEMANTICS = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-26-evidence-aware', populationDefinition: 'admitted cross-currency Account candidate pairs' });
@@ -121,5 +137,15 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     return row;
   });
   const columns = LEDGER_COLUMNS;
-  return { ...document, rows, columns, summary, csv: toCsv(rows, columns), json: JSON.stringify(document, null, 2), summaryJson: JSON.stringify(summary, null, 2), version: LEDGER_VERSION };
+  return {
+    ...document,
+    rows,
+    columns,
+    summary,
+    get csvChunks() { return toCsvChunks(rows, columns); },
+    get csv() { return this.csvChunks.join(''); },
+    get json() { return JSON.stringify(document, null, 2); },
+    get summaryJson() { return JSON.stringify(summary, null, 2); },
+    version: LEDGER_VERSION
+  };
 }
