@@ -16,7 +16,7 @@ The score-ledger v2 JSON/CSV content, summary v1 metadata, pair ordering, eviden
 
 ## Removed proposal workflow
 
-The active app MUST NOT expose proposal editing, parent currency selection, parent proposal export, child association export, or review-audit export. Proposal-only modules and tests MAY be removed when they are no longer needed by the preserved ledger implementation.
+The active app MUST NOT expose proposal editing, parent currency selection, parent proposal export, child association export, review-audit export, or full-ledger JSON download. Proposal-only modules and tests MAY be removed when they are no longer needed by the preserved ledger implementation. The internal full-ledger JSON contract MAY remain available to core callers.
 
 ## Accessibility and responsive behavior
 

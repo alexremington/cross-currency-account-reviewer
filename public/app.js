@@ -39,7 +39,6 @@ function renderExports() {
   panel.hidden = false;
   $('#exports-summary').textContent = state.pairs.length ? `Complete ledger ready: ${state.pairs.length} scored candidate pair${state.pairs.length === 1 ? '' : 's'}.` : 'No scored pairs were found. The ledger will contain zero records.';
   $('#export-ledger-csv').disabled = false;
-  $('#export-ledger-json').disabled = false;
   $('#export-ledger-summary').disabled = false;
 }
 
@@ -110,17 +109,6 @@ $('#export-ledger-csv').addEventListener('click', () => {
   } catch (error) {
     setStatus('Download failed', 'error');
     toast(`Could not download the score ledger: ${error.message}`);
-  }
-});
-
-$('#export-ledger-json').addEventListener('click', () => {
-  try {
-    const result = ledger();
-    download('score-ledger.json', result.json, 'application/json');
-    toast(`Downloaded score-ledger.json with ${result.records.length} scored pair${result.records.length === 1 ? '' : 's'}.`);
-  } catch (error) {
-    setStatus('Download failed', 'error');
-    toast(`Could not download the full ledger: ${error.message}`);
   }
 });
 

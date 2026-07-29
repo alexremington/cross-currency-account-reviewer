@@ -46,7 +46,7 @@ The app reads files locally in the browser. It does not upload data or connect t
 1. Export the Salesforce Account data as a CSV and keep the file on your computer.
 2. In the app, choose **Import Account CSV** and select the file.
 3. Review the validation message and field guide, then choose **Match now** or **Match and download full score ledger**.
-4. Use the Outputs section to download the score ledger CSV, full ledger JSON, or summary JSON. These downloads do not require reviewing individual pairs.
+4. Use the Outputs section to download the score ledger CSV and summary JSON. The CSV contains the scored rows; the summary provides batch metadata and column definitions.
 
 The app only creates local downloads. It does not insert records into Salesforce.
 

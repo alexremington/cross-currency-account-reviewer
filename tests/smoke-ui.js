@@ -35,6 +35,7 @@ try {
   await page.locator('#csv-input').setInputFiles(fixture);
   if (!(await page.getByText('LastModifiedDate', { exact: true }).count())) throw new Error('Missing complete field guide.');
   if (!(await page.getByText(/Skipped 1 row with unavailable Account Name/).count())) throw new Error('Unavailable Account Name row was not reported as a non-blocking skip.');
+  if (await page.getByRole('button', { name: 'Download full ledger JSON', exact: true }).count()) throw new Error('Named regression: retired full-ledger JSON download is still rendered.');
   if (await page.getByRole('button', { name: 'Match now', exact: true }).isDisabled()) throw new Error('Match now is incorrectly disabled after valid import.');
   if (await page.getByRole('button', { name: 'Match and download full score ledger', exact: true }).isDisabled()) throw new Error('Combined match/download action is incorrectly disabled after valid import.');
 
@@ -57,11 +58,6 @@ try {
   await page.getByRole('button', { name: 'Download score ledger CSV', exact: true }).click();
   const standaloneCsv = await readDownload(await standaloneDownload, 'score-ledger.csv');
   if (standaloneCsv !== combinedCsv) throw new Error('Standalone CSV download does not match the combined ledger.');
-
-  const jsonDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download full ledger JSON', exact: true }).click();
-  const ledgerJson = await readDownload(await jsonDownload, 'score-ledger.json');
-  if (!ledgerJson.includes('cross-currency-score-ledger/v2') || !ledgerJson.includes('"candidatePairCount": 2')) throw new Error('Full ledger JSON is missing the expected contract or pair count.');
 
   const summaryDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download summary JSON', exact: true }).click();
@@ -86,5 +82,5 @@ try {
   }
 
   await browser.close();
-  console.log('Playwright smoke passed: import → Match now → combined CSV download → standalone CSV/JSON downloads → zero-pair output → responsive layout.');
+  console.log('Playwright smoke passed: import → Match now → combined CSV download → standalone CSV/summary downloads → zero-pair output → responsive layout.');
 } finally { server.kill('SIGTERM'); }

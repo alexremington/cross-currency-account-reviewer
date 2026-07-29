@@ -10,7 +10,7 @@ This design direction was produced from the Hume review for the approved v1 stor
 
 1. Import guidance: required fields, scored fields, and currency coverage.
 2. Match actions: a match-only action and a combined match/download action.
-3. Outputs: exact scored-pair count and separate CSV, full JSON, and summary JSON downloads.
+3. Outputs: exact scored-pair count and separate CSV and summary JSON downloads.
 
 ## Interaction and accessibility requirements
 
@@ -25,8 +25,8 @@ This design direction was produced from the Hume review for the approved v1 stor
 
 ## Score-ledger output and maturity pass
 
-- After matching, show a named Outputs section with the full score ledger as the primary deliverable. It must be downloadable as CSV and JSON without entering a pair-review workflow.
-- State the exact scored-pair count and distinguish the lean CSV, full ledger JSON, and summary JSON.
+- After matching, show a named Outputs section with the full score ledger as the primary deliverable. It must be downloadable as CSV with a separate summary JSON for metadata.
+- State the exact scored-pair count and distinguish the lean CSV from the summary JSON.
 - The ledger must preserve pair identity, IDs, currencies, scores, bands, reasons, and raw/normalized evidence for every scoring field. Keep the CSV lean; provide batch metadata and column definitions in a separate summary JSON.
 - Keep import guidance grouped into required, scored, and imported-but-not-scored fields. Explain the nonblank, different-currency candidate rule.
 - In the import panel, keep the example CSV help affordance visually secondary to the primary upload button, but close enough to read as part of the same workflow. It should describe the file as an example/template, not as required input.

@@ -12,6 +12,6 @@ This change removes the pair queue, pair decision, proposal editing, parent prop
 
 - `Match now` remains a match-only action.
 - `Match and download full score ledger` is available after valid import, runs one fresh match, downloads only `score-ledger.csv`, and is disabled after successful use for that dataset.
-- Separate CSV, full JSON, and summary JSON downloads remain available in Outputs.
+- Separate CSV and summary JSON downloads remain available in Outputs. The full structured JSON remains an internal core contract but is not surfaced as a browser download.
 - The score-ledger v2, summary v1, scoring semantics, and deterministic recommended-master fields remain unchanged.
 - The browser download helper must use a document-attached temporary anchor and surface matching or download failures.
