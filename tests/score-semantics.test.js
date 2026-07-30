@@ -4,7 +4,7 @@ import { legacyScoreSemantics, validateScoreSemantics, CALIBRATED_ARTIFACT_VERSI
 import { buildScoreLedger } from '../core/export.js';
 
 test('named regression: Cross Currency scores declare legacy semantics until calibrated', () => {
-  const metadata = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-26-evidence-aware', populationDefinition: 'cross-currency candidates' });
+  const metadata = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-29-semantic-conflict-penalties-v9', populationDefinition: 'cross-currency candidates' });
   assert.equal(validateScoreSemantics(metadata).valid, true);
   assert.equal(validateScoreSemantics({ ...metadata, scoreSemantics: 'calibrated-match-probability' }, { allowLegacy: false }).valid, false);
   assert.equal(CALIBRATED_ARTIFACT_VERSION, 'cross-currency-score-ledger/v6');

@@ -2,7 +2,7 @@ import { normalizeAddress, normalizeComparableInput, normalizePhone, normalizeTe
 
 // Pinned from Duplicate Reviewer Account model: recalibrate-account-scoring-model
 // plus account-three-lane-score-distribution and account-hierarchy-aware-top-lane.
-export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-26-evidence-aware';
+export const ACCOUNT_MODEL_VERSION = 'duplicate-reviewer-account-model/2026-07-29-semantic-conflict-penalties-v9';
 export const MAX_CROSS_CURRENCY_CANDIDATE_PAIRS = 250000;
 
 const FIELD_WEIGHTS = {
@@ -75,6 +75,7 @@ const INTERMEDIATE_RULE_SCORES = {
   'exact-name-only': 90,
   'exact-website-phone-cross-currency': 94
 };
+const SEMANTIC_CONFLICT_PENALTY_CAPS = { narrow: 89, explicit: 69, broad: 49 };
 
 function clamp(value) { return Math.max(0, Math.min(100, Math.round(value))); }
 function tokens(value) { return normalizeText(value).split(' ').filter(Boolean); }
@@ -414,6 +415,17 @@ function evidence(left, right, scores) {
   }));
 }
 
+function semanticConflictPenalty(value, scores, relationship) {
+  const clarification = ['unknown-near-name', 'material-token-conflict'].includes(relationship.kind) && Number(scores.name) >= 0.7 && scores.website === 1 && scores.phone === 1;
+  if (clarification || ['same-level-exact', 'same-level-equivalent'].includes(relationship.kind)) return { value, severity: 'none', cap: null, applied: false, reason: '' };
+  let severity = 'narrow';
+  if (relationship.kind === 'scope-divergence' || relationship.kind === 'hierarchy-expansion') severity = 'explicit';
+  else if (relationship.kind === 'name-conflict' || (Number(scores.name) || 0) < 0.65) severity = 'broad';
+  const cap = SEMANTIC_CONFLICT_PENALTY_CAPS[severity];
+  const applied = value > cap;
+  return { value: Math.min(value, cap), severity, cap, applied, reason: applied ? `Semantic ${severity} name conflict penalty capped score at ${cap}` : '' };
+}
+
 export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   const left = adapt(leftRecord); const right = adapt(rightRecord);
   const currencyLeft = String(left.accountCurrency).toUpperCase();
@@ -441,7 +453,10 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   const exactConfidenceRule = exactRule(scores, relationship, left, right);
   const intermediateConfidenceRule = exactConfidenceRule ? '' : intermediateRule(scores, relationship);
   const lane = exactConfidenceRule ? 'exact-confidence' : intermediateConfidenceRule ? 'intermediate-confidence' : 'weighted-review';
-  const canonicalScore = exactConfidenceRule ? (EXACT_RULE_SCORES[exactConfidenceRule] || weighted.effectiveWeightedScore) : weighted.effectiveWeightedScore;
+  const preliminaryScore = exactConfidenceRule ? (EXACT_RULE_SCORES[exactConfidenceRule] || weighted.effectiveWeightedScore) : weighted.effectiveWeightedScore;
+  const semanticPenalty = semanticConflictPenalty(preliminaryScore, scores, relationship);
+  const canonicalScore = semanticPenalty.value;
+  const finalLane = semanticPenalty.applied ? 'weighted-review' : lane;
   const exactIdentity = Boolean(exactConfidenceRule);
   const addressConflict = decisiveAddressConflict(scores, left, right);
   const parentNeutralized = weighted.parentNeutralized;
@@ -466,16 +481,17 @@ export function scoreCrossCurrencyPair(leftRecord, rightRecord) {
   if (left.phoneEvidence.status === 'invalid' || right.phoneEvidence.status === 'invalid') reasons.push('Phone ignored as invalid');
   if (parentNeutralized) reasons.push('Ultimate parent conflict retained but neutralized by same-level identity');
   if (addressConflict) reasons.push('Decisive billing geography conflict');
+  if (semanticPenalty.applied) reasons.push(semanticPenalty.reason);
   reasons.push(`Cross-currency eligibility: ${currencyLeft} vs ${currencyRight}`);
   return {
     leftId: left.id, rightId: right.id, score: canonicalScore, value: canonicalScore, operationalScore: canonicalScore,
-    band: lane, lane, exactIdentity, currenciesDiffer, currencyLeft, currencyRight,
-    modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, rawWeightedScore: weighted.rawWeightedScore, effectiveWeightedScore: weighted.effectiveWeightedScore, fieldTreatments: weighted.fieldTreatments,
+    band: finalLane, lane: finalLane, exactIdentity: finalLane === 'exact-confidence', currenciesDiffer, currencyLeft, currencyRight,
+    modelVersion: ACCOUNT_MODEL_VERSION, fieldScores: scores, rawWeightedScore: weighted.rawWeightedScore, effectiveWeightedScore: weighted.effectiveWeightedScore, fieldTreatments: weighted.fieldTreatments, semanticConflictSeverity: semanticPenalty.severity, semanticConflictPenaltyCap: semanticPenalty.cap, semanticConflictPenaltyApplied: semanticPenalty.applied, semanticConflictPenaltyReason: semanticPenalty.reason,
     accountNameRelationship: relationship.kind,
     hierarchyRelationship: hierarchy.parentChild ? 'parent-child' : hierarchy.siblings ? 'siblings' : 'none',
     hierarchyEvidence: { directParentLeft: left.parent_name || '', directParentRight: right.parent_name || '', parentChild: hierarchy.parentChild, siblings: hierarchy.siblings },
     accountNameRelationshipReason: relationship.reason, contradictionCategory, contradictionReason: addressConflict ? 'Conflicting city, state, or postal geography.' : parentNeutralized ? 'parent-conflict-neutralized-by-same-level-identity' : hasConflict ? 'One or more comparable identity fields conflict.' : '', addressCategory: addressConflict ? 'decisive-address-conflict' : strongBillingAddressScore(scores) ? 'aligned' : 'minor-variation', exactConfidenceRule, intermediateConfidenceRule,
-    exactConfidenceEligible: Boolean(exactConfidenceRule), intermediateConfidenceEligible: Boolean(intermediateConfidenceRule),
+    exactConfidenceEligible: !semanticPenalty.applied && Boolean(exactConfidenceRule), intermediateConfidenceEligible: !semanticPenalty.applied && Boolean(intermediateConfidenceRule),
     sharedTaxonomy: { relationship: relationship.kind, promoted: lane !== 'weighted-review' },
     evidence: evidence(left, right, scores), reasonCodes: [
       exactIdentity ? 'exact-cross-currency-identity' : lane === 'intermediate-confidence' ? 'intermediate-cross-currency-match' : 'weighted-cross-currency-review',

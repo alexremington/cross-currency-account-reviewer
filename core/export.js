@@ -21,7 +21,8 @@ export function toCsvChunks(rows, columns, targetLength = CSV_CHUNK_TARGET_BYTES
 export function toCsv(rows, columns) { return toCsvChunks(rows, columns).join(''); }
 
 const LEDGER_VERSION = 'cross-currency-score-ledger/v2';
-const SCORE_SEMANTICS = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-26-evidence-aware', populationDefinition: 'admitted cross-currency Account candidate pairs' });
+const SCORE_SEMANTICS = legacyScoreSemantics({ objectType: 'account', surface: 'cross-currency-reviewer', modelVersion: 'duplicate-reviewer-account-model/2026-07-29-semantic-conflict-penalties-v9', populationDefinition: 'admitted cross-currency Account candidate pairs' });
+const SEMANTIC_CONFLICT_COLUMNS = ['semanticConflictSeverity', 'semanticConflictPenaltyCap', 'semanticConflictPenaltyApplied', 'semanticConflictPenaltyReason'];
 const PRESENTATION_VERSION = 'human-review-score-ledger/v1';
 const RECOMMENDED_MASTER_FIELDS = [
   ['id', 'recommendedMasterId'], ['name', 'recommendedMasterName'], ['currencyisocode', 'recommendedMasterCurrencyIsoCode'],
@@ -30,6 +31,7 @@ const RECOMMENDED_MASTER_FIELDS = [
   ['billingcountry', 'recommendedMasterBillingCountry'], ['ultimate_parent_account__c', 'recommendedMasterUltimateParentAccount']
 ];
 const LEDGER_COLUMNS = [
+  ...SEMANTIC_CONFLICT_COLUMNS,
   'pairKey', 'leftId', 'leftCurrency', 'rightId', 'rightCurrency', 'score', 'scoreUnrounded', 'weightedRawValue', 'weightedEffectiveValue', 'fieldTreatments', 'band', 'scoreContractVersion', 'scoreSemantics', 'scoreFieldsContractVersion', 'canonicalField', 'precisionField', 'diagnosticFields', 'diagnosticScale', 'surface', 'populationDefinition', 'modelVersion', 'accountNameRelationship', 'accountNameRelationshipReason', 'hierarchyRelationship', 'hierarchyEvidence', 'contradictionCategory', 'contradictionReason', 'exactConfidenceRule', 'intermediateConfidenceRule', 'exactConfidenceEligible', 'intermediateConfidenceEligible', 'fieldScores', 'exactIdentity', 'reasonCodes', 'reasons', 'matchedEvidenceFields',
   'conflictingEvidenceFields', 'blankEvidenceFields',
   ...RECOMMENDED_MASTER_FIELDS.map(([, column]) => column),
@@ -77,7 +79,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
       weightedRawValue: pair.rawWeightedScore ?? pair.score,
       weightedEffectiveValue: pair.effectiveWeightedScore ?? pair.score,
       ...SCORE_SEMANTICS,
-      fieldTreatments: pair.fieldTreatments || [],
+      fieldTreatments: pair.fieldTreatments || [], semanticConflictSeverity: pair.semanticConflictSeverity || 'none', semanticConflictPenaltyCap: pair.semanticConflictPenaltyCap ?? null, semanticConflictPenaltyApplied: Boolean(pair.semanticConflictPenaltyApplied), semanticConflictPenaltyReason: pair.semanticConflictPenaltyReason || '',
       band: pair.band,
       modelVersion: pair.modelVersion || '',
       accountNameRelationship: pair.accountNameRelationship || '',
@@ -139,6 +141,7 @@ export function buildScoreLedger(pairs, records, metadata = {}) {
     return {
       recommendedMasterId: master.id || '', recommendedMasterName: master.name || '', recommendedMasterCurrency: master.currencyisocode || '', recommendedMasterWebsite: master.website || '', recommendedMasterPhone: master.phone || '', recommendedMasterAddress: accountAddress(master), recommendedMasterHierarchy: accountHierarchy(master),
       recommendedSubordinateId: subordinate.id || '', recommendedSubordinateName: rawField(subordinate, 'name'), recommendedSubordinateCurrency: rawField(subordinate, 'currencyisocode'), recommendedSubordinateWebsite: rawField(subordinate, 'website'), recommendedSubordinatePhone: rawField(subordinate, 'phone'), recommendedSubordinateAddress: accountAddress(subordinate), recommendedSubordinateHierarchy: accountHierarchy(subordinate),
+      semanticConflictSeverity: item.semanticConflictSeverity || 'none', semanticConflictPenaltyCap: item.semanticConflictPenaltyCap ?? '', semanticConflictPenaltyApplied: item.semanticConflictPenaltyApplied === true, semanticConflictPenaltyReason: item.semanticConflictPenaltyReason || '',
       score: item.score, matchSummary: statuses, reviewReason: [...new Set(reasons)].join(' | ')
     };
   });

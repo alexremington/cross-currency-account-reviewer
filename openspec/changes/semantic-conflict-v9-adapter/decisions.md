@@ -1,0 +1,3 @@
+- Duplicate Reviewer Account v9 is the semantic reference; Cross Currency consumes it through a local adapter.
+- Cross Currency does not import private production artifacts, pointers, credentials, or publication workflow.
+- Currency mismatch remains an eligibility criterion only, never an identity contradiction.

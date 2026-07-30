@@ -1,0 +1,5 @@
+- [ ] Port the v9 Account semantic conflict penalty adapter.
+- [ ] Add semantic fields to JSON and CSV ledgers without changing currency eligibility fields.
+- [ ] Add named parity, currency-eligibility, invalid-value, sentinel, hierarchy, and Renaissance regressions.
+- [ ] Validate large export memory behavior and the real Import → Match → Outputs path.
+- [ ] Run check, Windows check, and local Playwright smoke validation.

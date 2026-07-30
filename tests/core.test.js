@@ -73,6 +73,18 @@ test('named regression: currency substitution leaves non-currency semantics unch
   assert.equal(first.score, alternate.score); assert.deepEqual(first.fieldScores, alternate.fieldScores); assert.deepEqual(first.evidence, alternate.evidence);
 });
 
+test('named regression: cross-currency broad semantic conflict is capped without changing eligibility', () => {
+  const pair = scorePair(
+    { id: 'SEM-USD', name: 'Deloitte - Brussels Office', currencyisocode: 'USD', website: 'remanufacturing.org.uk', phone: '+44 1296423915', billingcountry: 'Belgium' },
+    { id: 'SEM-EUR', name: 'Government Of Bermuda - Brussels Office', currencyisocode: 'EUR', website: 'remanufacturing.org.uk', phone: '+44 1296423915', billingcountry: 'Belgium' }
+  );
+  assert.equal(pair.currenciesDiffer, true);
+  assert.equal(pair.semanticConflictSeverity, 'broad');
+  assert.equal(pair.semanticConflictPenaltyCap, 49);
+  assert.equal(pair.semanticConflictPenaltyApplied, true);
+  assert.ok(pair.score <= 49);
+});
+
 test('named regression: exact normalized cross-currency identity scores 100', () => {
   const parsed = parseCsv(fixture); const pairs = generatePairs(parsed.rows);
   assert.equal(pairs.length, 1); assert.equal(pairs[0].score, 100); assert.equal(pairs[0].reasonCodes[0], 'exact-cross-currency-identity');
