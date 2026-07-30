@@ -50,7 +50,7 @@ try {
   const combinedDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Match and download full score ledger', exact: true }).click();
   const combinedCsv = await readDownload(await combinedDownload, 'score-ledger.csv');
-  if (!combinedCsv.includes('pairKey') || !combinedCsv.includes('001EUR|001USD') || !combinedCsv.includes('recommendedMasterId')) throw new Error('Named regression: combined action did not download the complete score ledger.');
+  if (!combinedCsv.includes('recommendedMasterId') || !combinedCsv.includes('recommendedSubordinateId') || !combinedCsv.includes('matchSummary') || combinedCsv.includes('fieldScores')) throw new Error('Named regression: combined action did not download the compact score ledger.');
   if (!(await page.getByRole('button', { name: 'Match and download full score ledger', exact: true }).isDisabled())) throw new Error('Combined action remained enabled after successful one-shot use.');
   if (await page.evaluate(() => document.activeElement?.id) !== 'match-button') throw new Error('Named regression: focus was not restored after the combined download.');
 
@@ -69,7 +69,7 @@ try {
   await page.getByRole('button', { name: 'Match and download full score ledger', exact: true }).click();
   const zeroCsv = await readDownload(await zeroDownload, 'score-ledger.csv');
   await page.getByText('No scored pairs were found.').waitFor({ state: 'visible' });
-  if (!zeroCsv.includes('pairKey')) throw new Error('Zero-pair combined action did not produce a valid empty ledger.');
+  if (!zeroCsv.includes('recommendedMasterId')) throw new Error('Zero-pair combined action did not produce a valid empty ledger.');
 
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 1000 });

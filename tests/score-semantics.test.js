@@ -13,6 +13,6 @@ test('named regression: Cross Currency scores declare legacy semantics until cal
 test('named regression: Cross Currency ledger carries shared score semantics metadata', () => {
   const result = buildScoreLedger([{ leftId: 'A', rightId: 'B', score: 82, operationalScore: 82, evidence: [], reasonCodes: [], reasons: [], fieldScores: [] }], [{ id: 'A', currencyisocode: 'USD' }, { id: 'B', currencyisocode: 'EUR' }]);
   assert.equal(result.scoreSemantics, 'legacy-heuristic-score');
-  assert.equal(result.rows[0].scoreContractVersion, 'match-probability/v1');
-  assert.equal(result.rows[0].surface, 'cross-currency-reviewer');
+  assert.equal(result.records[0].scoreContractVersion, 'match-probability/v1');
+  assert.equal(result.records[0].surface, 'cross-currency-reviewer');
 });

@@ -48,7 +48,7 @@ test('named regression: Cross Currency identifies direct parent versus departmen
     { id: 'DOS-PARENT', name: 'U.S. DEPT. OF STATE', currencyisocode: 'USD', parent_name: 'U.S. DEPT. OF STATE' }
   ], { headers: ['Id', 'Name', 'CurrencyIsoCode', 'Parent.Name'] });
   assert.equal(ledger.records[0].hierarchyRelationship, 'parent-child');
-  assert.match(ledger.csv, /hierarchyRelationship/);
+  assert.match(ledger.richCsv, /hierarchyRelationship/); assert.match(ledger.csv, /recommendedSubordinateId/); assert.match(ledger.csv, /Hierarchy: parent-child/);
 });
 
 test('named regression: website host normalization and contextual exceptions are stable', () => {
@@ -254,16 +254,16 @@ test('named regression: full score ledger reconciles every scored pair and prese
   const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website,Phone,BillingStreet,LastModifiedDate\nA,Acme Media,USD,https://acme.example.com,2125550100,1 Main,2025-01-01\nB,Acme Media,EUR,https://www.acme.example.com,2125550100,1 Main,2025-01-02');
   const pairs = generatePairs(parsed.rows); const result = buildScoreLedger(pairs, parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
   assert.equal(result.records.length, pairs.length); assert.equal(result.records[0].score, 100); assert.equal(result.records[0].evidence.length, 6); assert.ok(result.records[0].evidence.some((item) => item.field === 'address' && item.status === 'matched'));
-  assert.match(result.csv, /pairKey/); assert.match(result.csv, /score,scoreUnrounded,weightedRawValue,weightedEffectiveValue/); assert.doesNotMatch(result.csv, /operationalScore|rawWeightedScore|effectiveWeightedScore/); assert.doesNotMatch(result.csv, /2025-01-01/); assert.match(result.json, /cross-currency-score-ledger\/v2/); assert.equal(result.source.recordCount, 2); assert.equal(result.summary.candidatePairCount, 1);
+  assert.deepEqual(result.columns, ['recommendedMasterId', 'recommendedMasterName', 'recommendedMasterCurrency', 'recommendedMasterWebsite', 'recommendedMasterPhone', 'recommendedMasterAddress', 'recommendedMasterHierarchy', 'recommendedSubordinateId', 'recommendedSubordinateName', 'recommendedSubordinateCurrency', 'recommendedSubordinateWebsite', 'recommendedSubordinatePhone', 'recommendedSubordinateAddress', 'recommendedSubordinateHierarchy', 'score', 'matchSummary', 'reviewReason']); assert.match(result.csv, /recommendedSubordinateId/); assert.doesNotMatch(result.csv, /fieldScores|scoreUnrounded|2025-01-01/); assert.match(result.richCsv, /pairKey/); assert.match(result.json, /cross-currency-score-ledger\/v2/); assert.equal(result.source.recordCount, 2); assert.equal(result.summary.candidatePairCount, 1);
 });
 
 test('named regression: ledger preserves source cells and complete zero-pair schema', () => {
   const parsed = parseCsv('Id,Name,CurrencyIsoCode,Website\nA," Acme Media ",USD," https://acme.example.com "\nB,Other Media,USD,https://other.example.com');
   const empty = buildScoreLedger([], parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
-  assert.match(empty.csv, /nameLeftRaw/); assert.match(empty.csv, /billingAddressRightNormalized/); assert.match(empty.csv, /ultimateParentAccountStatus/); assert.doesNotMatch(empty.csv, /sourceRecordCount|leftSourceRow|leftNameRaw|rightNameRaw/);
+  assert.match(empty.csv, /recommendedMasterId/); assert.doesNotMatch(empty.csv, /nameLeftRaw|billingAddressRightNormalized|ultimateParentAccountStatus/);
   const cross = parseCsv('Id,Name,CurrencyIsoCode,Website\nB,Acme Media,EUR,https://www.acme.example.com\nA," Acme Media ",USD," https://acme.example.com "');
   const ledger = buildScoreLedger(generatePairs(cross.rows), cross.rows, { fileName: 'accounts.csv' });
-  assert.equal(ledger.records[0].pairKey, 'A|B'); assert.equal(ledger.records[0].left.id, 'A'); assert.equal(ledger.records[0].evidence.find((item) => item.field === 'name').left.raw, ' Acme Media '); assert.match(ledger.summaryJson, /pairColumns/);
+  assert.equal(ledger.records[0].pairKey, 'A|B'); assert.equal(ledger.records[0].left.id, 'A'); assert.equal(ledger.records[0].evidence.find((item) => item.field === 'name').left.raw, ' Acme Media '); assert.match(ledger.summaryJson, /pairColumns/); assert.ok(ledger.summary.pairColumns.includes('recommendedMasterId'));
 });
 
 test('named regression: large score ledger CSV is chunked without changing reconstruction', () => {
@@ -329,7 +329,7 @@ test('named regression: score ledger includes deterministic recommended master s
   const ledger = buildScoreLedger(generatePairs(parsed.rows), parsed.rows, { fileName: 'accounts.csv', headers: parsed.headers, generatedAt: '2026-01-01T00:00:00.000Z' });
   assert.equal(ledger.records[0].recommendedMaster.id, 'MASTER-EUR');
   assert.match(ledger.csv, /recommendedMasterId/);
-  assert.match(ledger.csv, /recommendedMasterCurrencyIsoCode/);
+  assert.equal(ledger.rows[0].recommendedSubordinateId, 'CHILD-USD'); assert.match(ledger.csv, /recommendedMasterCurrency/);
   assert.match(ledger.csv, /MASTER-EUR/);
-  assert.match(ledger.summaryJson, /recommendedMasterUltimateParentAccount/);
+  assert.match(ledger.summaryJson, /recommendedMasterId/);
 });
